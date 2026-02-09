@@ -4,48 +4,27 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { PDFDocument, StandardFonts } from "pdf-lib";
 
-type ScorePart = {
-  matched: number;
-  total: number;
-  ratio: number;
-  weight: number;
-};
-
-type ScoreBreakdown = {
-  requirements?: ScorePart;
-  responsibilities?: ScorePart;
-  preferred?: ScorePart;
-  other?: ScorePart;
-};
-
 type Analysis = {
   matchScore?: number;
   summary?: string;
   gapAnalysis?: string[];
   improvements?: string[];
-  keywordMatches?: string[];
-  missingKeywords?: string[];
+  suggestions?: string[];
   bulletRewrites?: string[];
   atsNotes?: string[];
   compensationFit?: number | null;
   compensationNotes?: string[];
   overallScore?: number | null;
-  scoreBreakdown?: ScoreBreakdown;
+  keyCategories?: string[];
+  matchedCategories?: string[];
+  missingCategories?: string[];
+  bonusCategories?: string[];
   raw?: string;
 };
 
 type Meta = {
   cvChars: number;
   jdChars: number;
-  scoreBreakdown?: ScoreBreakdown;
-  skillBuckets?: {
-    keySkills?: string[];
-    bonusSkills?: string[];
-    keyMatched?: string[];
-    keyMissing?: string[];
-    bonusMatched?: string[];
-    bonusMissing?: string[];
-  };
 };
 
 type Payload = {
@@ -55,195 +34,13 @@ type Payload = {
 
 const STORAGE_KEY = "resume_analysis_payload";
 
-const CATEGORY_KEYWORDS: Record<string, string[]> = {
-  Languages: [
-    "javascript",
-    "typescript",
-    "python",
-    "java",
-    "csharp",
-    "cplusplus",
-    "go",
-    "golang",
-    "ruby",
-    "php",
-    "swift",
-    "kotlin",
-    "scala",
-    "rust",
-    "sql"
-  ],
-  Frontend: [
-    "react",
-    "next",
-    "vue",
-    "angular",
-    "svelte",
-    "html",
-    "css",
-    "tailwind",
-    "redux",
-    "webpack",
-    "vite",
-    "storybook",
-    "jquery"
-  ],
-  Backend: [
-    "nodejs",
-    "express",
-    "nestjs",
-    "django",
-    "flask",
-    "fastapi",
-    "spring",
-    "rails",
-    "graphql",
-    "rest",
-    "grpc",
-    "microservices",
-    "api",
-    "backend"
-  ],
-  "Cloud & DevOps": [
-    "aws",
-    "gcp",
-    "azure",
-    "docker",
-    "kubernetes",
-    "terraform",
-    "ci",
-    "cd",
-    "github",
-    "gitlab",
-    "jenkins",
-    "helm",
-    "cloud",
-    "devops"
-  ],
-  "Data & AI": [
-    "postgres",
-    "mysql",
-    "mongodb",
-    "redis",
-    "elasticsearch",
-    "kafka",
-    "spark",
-    "hadoop",
-    "pandas",
-    "numpy",
-    "tensorflow",
-    "pytorch",
-    "ml",
-    "ai",
-    "llm",
-    "vector",
-    "snowflake"
-  ],
-  "Product & Leadership": [
-    "stakeholder",
-    "communication",
-    "leadership",
-    "mentoring",
-    "roadmap",
-    "agile",
-    "scrum",
-    "product",
-    "design",
-    "collaboration",
-    "ownership",
-    "strategy"
-  ]
-};
-
-const CATEGORY_ORDER = [
-  "Languages",
-  "Frontend",
-  "Backend",
-  "Cloud & DevOps",
-  "Data & AI",
-  "Product & Leadership",
-  "Other"
-];
-
-const cleanGap = (item: string) =>
-  item.replace(/^Missing keyword:\s*/i, "").replace(/\.$/, "").trim();
-
-const buildActionItems = (analysis: Analysis) => {
-  const items: string[] = [];
-
-  for (const improvement of analysis.improvements || []) {
-    items.push(`Do: ${improvement}`);
-  }
-
-  for (const gap of (analysis.gapAnalysis || []).slice(0, 6)) {
-    const keyword = cleanGap(gap);
-    if (keyword) {
-      items.push(`Add evidence for ${keyword} (project, metric, or tool).`);
-    } else {
-      items.push(`Close gap: ${gap}`);
-    }
-  }
-
-  for (const rewrite of (analysis.bulletRewrites || []).slice(0, 3)) {
-    items.push(`Rewrite a bullet: ${rewrite}`);
-  }
-
-  return Array.from(new Set(items)).slice(0, 8);
-};
-
-const formatCoverage = (part?: ScorePart) => {
-  if (!part || part.total === 0) return "N/A";
-  return `${Math.round(part.ratio * 100)}% (${part.matched}/${part.total})`;
-};
-
-const prettySkill = (skill: string) => {
-  const map: Record<string, string> = {
-    nodejs: "Node.js",
-    csharp: "C#",
-    cplusplus: "C++",
-    dotnet: ".NET",
-    aws: "AWS",
-    gcp: "GCP",
-    ai: "AI",
-    ml: "ML",
-    llm: "LLM"
-  };
-
-  if (map[skill]) return map[skill];
-  if (skill.length <= 3) return skill.toUpperCase();
-  return skill.charAt(0).toUpperCase() + skill.slice(1);
-};
-
-const buildCategoryMap = () => {
-  const map = new Map<string, string>();
-  for (const [category, keywords] of Object.entries(CATEGORY_KEYWORDS)) {
-    for (const keyword of keywords) {
-      map.set(keyword, category);
-    }
-  }
-  return map;
-};
-
-const categorizeSkills = (skills: string[]) => {
-  const map = buildCategoryMap();
-  const buckets: Record<string, string[]> = {};
-  for (const category of CATEGORY_ORDER) {
-    buckets[category] = [];
-  }
-
-  for (const skill of skills) {
-    const key = skill.toLowerCase();
-    const category = map.get(key) || "Other";
-    if (!buckets[category].includes(skill)) {
-      buckets[category].push(skill);
-    }
-  }
-
-  return buckets;
-};
+const formatCategory = (category: string) =>
+  category
+    .replace(/[_/]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 
 const buildMarkdown = (analysis: Analysis, meta?: Meta) => {
-  const actionItems = buildActionItems(analysis);
   const lines = [
     "# Resume Analyser Report",
     "",
@@ -262,33 +59,22 @@ const buildMarkdown = (analysis: Analysis, meta?: Meta) => {
     "",
     meta ? `Resume chars: ${meta.cvChars} | JD chars: ${meta.jdChars}` : "",
     "",
-    "## Score Breakdown",
-    `Requirements coverage: ${formatCoverage(meta?.scoreBreakdown?.requirements)}`,
-    `Responsibilities coverage: ${formatCoverage(
-      meta?.scoreBreakdown?.responsibilities
-    )}`,
-    `Preferred coverage: ${formatCoverage(meta?.scoreBreakdown?.preferred)}`,
+    "## Key Skill Categories",
+    ...(analysis.keyCategories || []).map((item) => `- ${item}`),
     "",
-    "## Action Plan",
-    ...actionItems.map((item) => `- ${item}`),
+    "## Matched Categories",
+    ...(analysis.matchedCategories || []).map((item) => `- ${item}`),
     "",
-    "## Compensation Notes",
-    ...(Array.isArray(analysis.compensationNotes)
-      ? analysis.compensationNotes
-      : []
-    ).map((item) => `- ${item}`),
+    "## Missing Categories",
+    ...(analysis.missingCategories || []).map((item) => `- ${item}`),
     "",
-    "## Gap Analysis",
-    ...(analysis.gapAnalysis || []).map((item) => `- ${item}`),
+    "## Bonus Categories",
+    ...(analysis.bonusCategories || []).map((item) => `- ${item}`),
     "",
-    "## Improvements",
-    ...(analysis.improvements || []).map((item) => `- ${item}`),
-    "",
-    "## Keyword Matches",
-    ...(analysis.keywordMatches || []).map((item) => `- ${item}`),
-    "",
-    "## Missing Keywords",
-    ...(analysis.missingKeywords || []).map((item) => `- ${item}`),
+    "## Improvement Suggestions",
+    ...(analysis.suggestions || analysis.improvements || []).map(
+      (item) => `- ${item}`
+    ),
     "",
     "## Bullet Rewrites",
     ...(analysis.bulletRewrites || []).map((item) => `- ${item}`),
@@ -375,29 +161,17 @@ export default function ResultsPage() {
     router.push("/");
   };
 
-  const actionItems = useMemo(
-    () => (analysis ? buildActionItems(analysis) : []),
-    [analysis]
-  );
+  const keyCategories = analysis?.keyCategories || [];
+  const matchedCategories = analysis?.matchedCategories || [];
+  const missingCategories = analysis?.missingCategories || [];
+  const bonusCategories = analysis?.bonusCategories || [];
 
-  const matchingSkills = meta?.skillBuckets?.keyMatched || [];
-  const missingKeySkills = meta?.skillBuckets?.keyMissing || [];
-  const bonusMatched = meta?.skillBuckets?.bonusMatched || [];
-  const bonusMissing = meta?.skillBuckets?.bonusMissing || [];
-  const bonusSkills = [...bonusMatched, ...bonusMissing];
-
-  const matchingByCategory = useMemo(
-    () => categorizeSkills(matchingSkills),
-    [matchingSkills]
-  );
-  const missingByCategory = useMemo(
-    () => categorizeSkills(missingKeySkills),
-    [missingKeySkills]
-  );
-  const bonusByCategory = useMemo(
-    () => categorizeSkills(bonusSkills),
-    [bonusSkills]
-  );
+  const suggestions = useMemo(() => {
+    if (!analysis) return [];
+    return analysis.suggestions?.length
+      ? analysis.suggestions
+      : analysis.improvements || [];
+  }, [analysis]);
 
   const rewriteSuggestions = useMemo(() => {
     if (!analysis) return [];
@@ -406,51 +180,7 @@ export default function ResultsPage() {
     return (analysis.improvements || []).slice(0, 5);
   }, [analysis]);
 
-  const scoreValue =
-    analysis?.overallScore ?? analysis?.matchScore ?? analysis?.compensationFit ?? 0;
-
-  const suggestionBlocks = useMemo(() => {
-    const blocks = [] as {
-      title: string;
-      description: string;
-      items: string[];
-      tone: "alert" | "warn" | "good";
-    }[];
-
-    if (missingKeySkills.length > 0) {
-      blocks.push({
-        title: "Close critical gaps",
-        description:
-          "Prioritize these missing skills to immediately raise your match score.",
-        items: missingKeySkills.slice(0, 4).map((skill) =>
-          `Add ${prettySkill(skill)} with a concrete project example.`
-        ),
-        tone: "alert"
-      });
-    }
-
-    if (rewriteSuggestions.length > 0) {
-      blocks.push({
-        title: "Rewrite for impact",
-        description:
-          "Sharper bullets make your fit obvious to both ATS and recruiters.",
-        items: rewriteSuggestions,
-        tone: "warn"
-      });
-    }
-
-    if ((analysis?.atsNotes || []).length > 0) {
-      blocks.push({
-        title: "Polish for ATS",
-        description:
-          "Small formatting tweaks improve parsing and recruiter readability.",
-        items: analysis?.atsNotes?.slice(0, 3) || [],
-        tone: "good"
-      });
-    }
-
-    return blocks;
-  }, [analysis, missingKeySkills, rewriteSuggestions]);
+  const scoreValue = analysis?.overallScore ?? analysis?.matchScore ?? 0;
 
   const downloadReport = () => {
     if (!analysis) return;
@@ -600,21 +330,18 @@ export default function ResultsPage() {
                   Analysis Complete
                 </h1>
                 <p className="max-w-2xl text-sm text-white/80">
-                  Your match score is calibrated against the JD requirements,
-                  responsibilities, and preferred skills. Use the action plan to
-                  close gaps quickly.
+                  Your match score is based on the top 6 skill categories from
+                  the JD. Use the plan below to close gaps quickly.
                 </p>
                 <div className="flex flex-wrap gap-3 text-xs">
                   <span className="rounded-full bg-white/15 px-4 py-2">
-                    Requirements: {formatCoverage(meta?.scoreBreakdown?.requirements)}
+                    Key categories: {matchedCategories.length}/{keyCategories.length}
                   </span>
                   <span className="rounded-full bg-white/15 px-4 py-2">
-                    Responsibilities: {formatCoverage(
-                      meta?.scoreBreakdown?.responsibilities
-                    )}
+                    Missing: {missingCategories.length}
                   </span>
                   <span className="rounded-full bg-white/15 px-4 py-2">
-                    Preferred: {formatCoverage(meta?.scoreBreakdown?.preferred)}
+                    Bonus: {bonusCategories.length}
                   </span>
                 </div>
               </div>
@@ -635,13 +362,13 @@ export default function ResultsPage() {
             </div>
             <div className="rounded-3xl bg-white/95 p-4 text-slate-900 shadow-xl">
               <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
-                Skill match
+                Category match
               </p>
               <p className="mt-2 text-2xl font-semibold">
                 {analysis.matchScore ?? "--"}%
               </p>
               <span className="mt-2 inline-flex rounded-full bg-blue-100 px-3 py-1 text-xs text-blue-600">
-                Requirements + responsibilities
+                Top 6 categories
               </span>
             </div>
             <div className="rounded-3xl bg-white/95 p-4 text-slate-900 shadow-xl">
@@ -649,7 +376,7 @@ export default function ResultsPage() {
                 Key gaps
               </p>
               <p className="mt-2 text-2xl font-semibold">
-                {missingKeySkills.length}
+                {missingCategories.length}
               </p>
               <span className="mt-2 inline-flex rounded-full bg-amber-100 px-3 py-1 text-xs text-amber-700">
                 Focus these first
@@ -660,7 +387,7 @@ export default function ResultsPage() {
                 Bonus skills
               </p>
               <p className="mt-2 text-2xl font-semibold">
-                {bonusMatched.length}
+                {bonusCategories.length}
               </p>
               <span className="mt-2 inline-flex rounded-full bg-purple-100 px-3 py-1 text-xs text-purple-700">
                 Differentiators
@@ -675,24 +402,24 @@ export default function ResultsPage() {
                   ✓
                 </span>
                 <div>
-                  <p className="text-lg font-semibold">Matched skills</p>
+                  <p className="text-lg font-semibold">Matched categories</p>
                   <p className="text-xs text-slate-500">
-                    Skills from the JD already shown in your resume.
+                    Top categories already demonstrated in your resume.
                   </p>
                 </div>
               </div>
               <div className="mt-4 flex flex-wrap gap-2">
-                {matchingSkills.length === 0 && (
+                {matchedCategories.length === 0 && (
                   <span className="text-xs text-slate-500">
-                    No matching skills detected.
+                    No matching categories detected.
                   </span>
                 )}
-                {matchingSkills.slice(0, 20).map((skill) => (
+                {matchedCategories.map((category) => (
                   <span
-                    key={`match-${skill}`}
+                    key={`match-${category}`}
                     className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs text-emerald-700"
                   >
-                    {prettySkill(skill)}
+                    {formatCategory(category)}
                   </span>
                 ))}
               </div>
@@ -703,24 +430,24 @@ export default function ResultsPage() {
                   ✕
                 </span>
                 <div>
-                  <p className="text-lg font-semibold">Missing key skills</p>
+                  <p className="text-lg font-semibold">Missing key categories</p>
                   <p className="text-xs text-slate-500">
-                    Skills required by the JD but missing in your resume.
+                    Categories required by the JD but missing in your resume.
                   </p>
                 </div>
               </div>
               <div className="mt-4 flex flex-wrap gap-2">
-                {missingKeySkills.length === 0 && (
+                {missingCategories.length === 0 && (
                   <span className="text-xs text-slate-500">
-                    No missing skills detected.
+                    No missing categories detected.
                   </span>
                 )}
-                {missingKeySkills.slice(0, 20).map((skill) => (
+                {missingCategories.map((category) => (
                   <span
-                    key={`missing-${skill}`}
+                    key={`missing-${category}`}
                     className="rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-xs text-rose-700"
                   >
-                    {prettySkill(skill)}
+                    {formatCategory(category)}
                   </span>
                 ))}
               </div>
@@ -731,28 +458,24 @@ export default function ResultsPage() {
                   +
                 </span>
                 <div>
-                  <p className="text-lg font-semibold">Bonus skills</p>
+                  <p className="text-lg font-semibold">Bonus categories</p>
                   <p className="text-xs text-slate-500">
-                    Nice‑to‑have skills that boost differentiation.
+                    Extra strengths beyond the top 6 categories.
                   </p>
                 </div>
               </div>
               <div className="mt-4 flex flex-wrap gap-2">
-                {bonusSkills.length === 0 && (
+                {bonusCategories.length === 0 && (
                   <span className="text-xs text-slate-500">
-                    No bonus skills found.
+                    No bonus categories found.
                   </span>
                 )}
-                {bonusSkills.slice(0, 20).map((skill) => (
+                {bonusCategories.map((category) => (
                   <span
-                    key={`bonus-${skill}`}
-                    className={`rounded-full border px-3 py-1 text-xs ${
-                      bonusMatched.includes(skill)
-                        ? "border-blue-200 bg-blue-50 text-blue-700"
-                        : "border-slate-200 bg-slate-100 text-slate-700"
-                    }`}
+                    key={`bonus-${category}`}
+                    className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs text-blue-700"
                   >
-                    {prettySkill(skill)}
+                    {formatCategory(category)}
                   </span>
                 ))}
               </div>
@@ -761,18 +484,16 @@ export default function ResultsPage() {
 
           <section className="mt-10 rounded-[32px] bg-white/95 p-8 text-slate-900 shadow-xl">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <h2 className="font-display text-2xl">Skill categories</h2>
+              <h2 className="font-display text-2xl">Skill categories (top 6)</h2>
               <span className="text-xs text-slate-500">
-                5–6 focused buckets for clearer targeting.
+                Dynamic categories extracted from the JD.
               </span>
             </div>
             <div className="mt-6 grid gap-4 md:grid-cols-2">
-              {CATEGORY_ORDER.map((category) => {
-                const matched = matchingByCategory[category] || [];
-                const missing = missingByCategory[category] || [];
-                const bonus = bonusByCategory[category] || [];
-                const totalCount = matched.length + missing.length + bonus.length;
-                if (category === "Other" && totalCount === 0) return null;
+              {keyCategories.map((category) => {
+                const isMatched = matchedCategories.some(
+                  (item) => item.toLowerCase() === category.toLowerCase()
+                );
 
                 return (
                   <div
@@ -780,42 +501,22 @@ export default function ResultsPage() {
                     className="rounded-2xl border border-slate-200 bg-white p-4"
                   >
                     <div className="flex items-center justify-between">
-                      <p className="font-semibold">{category}</p>
-                      <span className="text-xs text-slate-500">
-                        {matched.length} matched · {missing.length} missing
+                      <p className="font-semibold">{formatCategory(category)}</p>
+                      <span
+                        className={`rounded-full px-3 py-1 text-xs ${
+                          isMatched
+                            ? "bg-emerald-100 text-emerald-700"
+                            : "bg-rose-100 text-rose-700"
+                        }`}
+                      >
+                        {isMatched ? "Matched" : "Missing"}
                       </span>
                     </div>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {matched.slice(0, 8).map((skill) => (
-                        <span
-                          key={`cat-match-${category}-${skill}`}
-                          className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs text-emerald-700"
-                        >
-                          {prettySkill(skill)}
-                        </span>
-                      ))}
-                      {missing.slice(0, 8).map((skill) => (
-                        <span
-                          key={`cat-miss-${category}-${skill}`}
-                          className="rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-xs text-rose-700"
-                        >
-                          {prettySkill(skill)}
-                        </span>
-                      ))}
-                      {bonus.slice(0, 6).map((skill) => (
-                        <span
-                          key={`cat-bonus-${category}-${skill}`}
-                          className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs text-blue-700"
-                        >
-                          {prettySkill(skill)}
-                        </span>
-                      ))}
-                      {totalCount === 0 && (
-                        <span className="text-xs text-slate-500">
-                          No skills detected in this category.
-                        </span>
-                      )}
-                    </div>
+                    <p className="mt-2 text-xs text-slate-500">
+                      {isMatched
+                        ? "Evidence found in your resume."
+                        : "Add evidence or keywords to cover this category."}
+                    </p>
                   </div>
                 );
               })}
@@ -830,45 +531,24 @@ export default function ResultsPage() {
               </div>
 
               <div className="mt-6 grid gap-4">
-                {suggestionBlocks.length === 0 && (
+                {suggestions.length === 0 && (
                   <div className="rounded-2xl border border-slate-200 bg-white p-4">
                     <p className="text-sm text-slate-600">
                       Run another analysis to generate tailored suggestions.
                     </p>
                   </div>
                 )}
-                {suggestionBlocks.map((block, index) => (
+                {suggestions.map((item, index) => (
                   <div
-                    key={`${block.title}-${index}`}
-                    className={`rounded-2xl border p-5 ${
-                      block.tone === "alert"
-                        ? "border-rose-200 bg-rose-50"
-                        : block.tone === "warn"
-                        ? "border-amber-200 bg-amber-50"
-                        : "border-emerald-200 bg-emerald-50"
-                    }`}
+                    key={`suggestion-${index}`}
+                    className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
                   >
                     <div className="flex items-start gap-4">
                       <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-sm font-semibold text-slate-800">
                         {index + 1}
                       </div>
                       <div className="space-y-2">
-                        <p className="text-lg font-semibold text-slate-900">
-                          {block.title}
-                        </p>
-                        <p className="text-sm text-slate-600">
-                          {block.description}
-                        </p>
-                        <div className="grid gap-2">
-                          {block.items.map((item, itemIndex) => (
-                            <div
-                              key={`${block.title}-${itemIndex}`}
-                              className="rounded-xl border border-white/80 bg-white/70 px-4 py-3 text-sm text-slate-700"
-                            >
-                              {item}
-                            </div>
-                          ))}
-                        </div>
+                        <p className="text-sm text-slate-700">{item}</p>
                       </div>
                     </div>
                   </div>
@@ -877,21 +557,6 @@ export default function ResultsPage() {
             </div>
 
             <div className="grid gap-6 lg:grid-cols-2">
-              <div className="rounded-[32px] bg-white/95 p-6 text-slate-900 shadow-xl">
-                <h2 className="font-display text-2xl">Action plan</h2>
-                <p className="text-xs text-slate-500">
-                  Focus on these steps to raise your score quickly.
-                </p>
-                <ol className="mt-4 list-decimal space-y-2 pl-5 text-sm text-slate-700">
-                  {actionItems.length === 0 && (
-                    <li>Run another analysis to get a full action list.</li>
-                  )}
-                  {actionItems.map((item, index) => (
-                    <li key={`action-${index}`}>{item}</li>
-                  ))}
-                </ol>
-              </div>
-
               <div className="rounded-[32px] bg-white/95 p-6 text-slate-900 shadow-xl">
                 <h2 className="font-display text-2xl">Rewrite playbook</h2>
                 <p className="text-xs text-slate-500">
@@ -906,9 +571,7 @@ export default function ResultsPage() {
                   ))}
                 </ul>
               </div>
-            </div>
 
-            <div className="grid gap-6 lg:grid-cols-2">
               <div className="rounded-[32px] bg-white/95 p-6 text-slate-900 shadow-xl">
                 <h2 className="font-display text-2xl">Other tips</h2>
                 <p className="text-xs text-slate-500">
@@ -920,21 +583,6 @@ export default function ResultsPage() {
                   )}
                   {(analysis.atsNotes || []).map((note, index) => (
                     <li key={`note-${index}`}>{note}</li>
-                  ))}
-                </ul>
-              </div>
-
-              <div className="rounded-[32px] bg-white/95 p-6 text-slate-900 shadow-xl">
-                <h2 className="font-display text-2xl">Compensation notes</h2>
-                <p className="text-xs text-slate-500">
-                  Salary alignment insights based on the ranges provided.
-                </p>
-                <ul className="mt-4 list-disc space-y-2 pl-5 text-sm text-slate-700">
-                  {(analysis.compensationNotes || []).length === 0 && (
-                    <li>Add ranges to view salary fit insights.</li>
-                  )}
-                  {(analysis.compensationNotes || []).map((note, index) => (
-                    <li key={`comp-${index}`}>{note}</li>
                   ))}
                 </ul>
               </div>

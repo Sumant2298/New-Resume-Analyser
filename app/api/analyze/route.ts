@@ -9,19 +9,6 @@ const MAX_CHARS = 12000;
 type SalaryRange = { min: number; max: number } | null;
 type ScoreInput = number | null | undefined;
 
-type ScorePart = {
-  matched: number;
-  total: number;
-  ratio: number;
-  weight: number;
-};
-
-type ScoreBreakdown = {
-  requirements: ScorePart;
-  responsibilities: ScorePart;
-  preferred: ScorePart;
-  other: ScorePart;
-};
 
 const STOPWORDS = new Set([
   "the",
@@ -88,6 +75,26 @@ const STOPWORDS = new Set([
   "must",
   "nice"
 ]);
+
+function normalizeCategory(name: string) {
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+function formatCategory(name: string) {
+  const cleaned = name
+    .replace(/[_/]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return cleaned.replace(/\b\w/g, (match) => match.toUpperCase());
+}
+
+function ensureStringArray(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => (typeof item === "string" ? item : ""))
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
 
 function normalizeWeight(value: number, fallback: number) {
   if (!Number.isFinite(value) || value <= 0 || value >= 1) return fallback;
@@ -250,6 +257,15 @@ function tokenize(text: string) {
     .filter((word) => word.length > 2 && !STOPWORDS.has(word));
 }
 
+function uniqueTokens(text: string) {
+  return Array.from(new Set(tokenize(text)));
+}
+
+function computeCategoryMatchScore(matched: string[], total: number) {
+  if (!total) return 0;
+  return Math.round((matched.length / total) * 100);
+}
+
 function splitJDSections(jdText: string) {
   const sections = {
     requirements: "",
@@ -288,82 +304,34 @@ function splitJDSections(jdText: string) {
   return sections;
 }
 
-function uniqueTokens(text: string) {
-  return Array.from(new Set(tokenize(text)));
-}
-
-function buildSectionTokens(jdText: string) {
-  const sections = splitJDSections(jdText);
-  return {
-    requirements: uniqueTokens(sections.requirements),
-    responsibilities: uniqueTokens(sections.responsibilities),
-    preferred: uniqueTokens(sections.preferred),
-    other: uniqueTokens(sections.other)
-  };
-}
-
-function coverageScore(tokens: string[], cvTokens: Set<string>) {
-  if (tokens.length === 0) {
-    return { matched: 0, total: 0, ratio: 0 };
-  }
-  const matched = tokens.reduce(
-    (count, token) => (cvTokens.has(token) ? count + 1 : count),
-    0
-  );
-  return { matched, total: tokens.length, ratio: matched / tokens.length };
-}
-
-function computeMatchScore(cvText: string, jdText: string) {
+function fallbackCategoryAnalysis(cvText: string, jdText: string) {
+  const jdTokens = uniqueTokens(jdText).slice(0, 6);
+  const keyCategories = jdTokens.map(formatCategory);
   const cvTokens = new Set(tokenize(cvText));
-  const sectionTokens = buildSectionTokens(jdText);
-
-  const reqScore = coverageScore(sectionTokens.requirements, cvTokens);
-  const respScore = coverageScore(sectionTokens.responsibilities, cvTokens);
-  const prefScore = coverageScore(sectionTokens.preferred, cvTokens);
-  const otherScore = coverageScore(sectionTokens.other, cvTokens);
-
-  const weights = {
-    requirements: 0.6,
-    responsibilities: 0.25,
-    preferred: 0.15,
-    other: 0.1
-  };
-
-  const breakdown: ScoreBreakdown = {
-    requirements: { ...reqScore, weight: weights.requirements },
-    responsibilities: { ...respScore, weight: weights.responsibilities },
-    preferred: { ...prefScore, weight: weights.preferred },
-    other: { ...otherScore, weight: weights.other }
-  };
-
-  const activeParts = Object.entries(breakdown).filter(
-    ([, value]) => value.total > 0
-  );
-
-  if (activeParts.length === 0) {
-    const fallback = coverageScore(uniqueTokens(jdText), cvTokens);
-    return {
-      score: Math.round(fallback.ratio * 100),
-      sectionTokens,
-      breakdown: {
-        requirements: { ...fallback, weight: 1 },
-        responsibilities: { matched: 0, total: 0, ratio: 0, weight: 0 },
-        preferred: { matched: 0, total: 0, ratio: 0, weight: 0 },
-        other: { matched: 0, total: 0, ratio: 0, weight: 0 }
-      }
-    };
+  const keyNormalized = new Map<string, string>();
+  for (const category of keyCategories) {
+    keyNormalized.set(normalizeCategory(category), category);
   }
 
-  const weightSum = activeParts.reduce((sum, [, value]) => sum + value.weight, 0);
-  const weightedScore = activeParts.reduce((sum, [, value]) => {
-    const adjustedWeight = weightSum > 0 ? value.weight / weightSum : 0;
-    return sum + value.ratio * adjustedWeight;
-  }, 0);
+  const matchedCategories = keyCategories.filter((category) =>
+    cvTokens.has(normalizeCategory(category))
+  );
+  const missingCategories = keyCategories.filter(
+    (category) => !cvTokens.has(normalizeCategory(category))
+  );
+  const bonusCandidates = uniqueTokens(jdText).filter(
+    (token) => !keyNormalized.has(normalizeCategory(token))
+  );
+  const bonusCategories = bonusCandidates
+    .filter((token) => cvTokens.has(token))
+    .slice(0, 6)
+    .map(formatCategory);
 
   return {
-    score: Math.round(weightedScore * 100),
-    breakdown,
-    sectionTokens
+    keyCategories,
+    matchedCategories,
+    missingCategories,
+    bonusCategories
   };
 }
 
@@ -398,22 +366,33 @@ function extractKeywordStats(jdText: string, cvText: string) {
 }
 
 function heuristicAnalysis(cvText: string, jdText: string) {
-  const { score, breakdown, sectionTokens } = computeMatchScore(cvText, jdText);
+  const categories = fallbackCategoryAnalysis(cvText, jdText);
   const keywords = extractKeywordStats(jdText, cvText);
+  const matchScore = computeCategoryMatchScore(
+    categories.matchedCategories,
+    categories.keyCategories.length
+  );
 
   return {
-    matchScore: score,
-    scoreBreakdown: breakdown,
-    sectionTokens,
+    matchScore,
+    keyCategories: categories.keyCategories,
+    matchedCategories: categories.matchedCategories,
+    missingCategories: categories.missingCategories,
+    bonusCategories: categories.bonusCategories,
     summary:
       "Heuristic analysis (no LLM key found). Configure GROQ_API_KEY for deeper insights.",
-    gapAnalysis: keywords.missingKeywords
-      .slice(0, 10)
-      .map((word) => `Missing keyword: ${word}`),
+    gapAnalysis: categories.missingCategories.map(
+      (category) => `Missing category: ${category}`
+    ),
     improvements: [
-      "Add missing role-specific keywords from the job description.",
+      "Add missing category keywords from the job description.",
       "Quantify impact in bullet points (metrics, outcomes, scale).",
       "Align your summary with the role's core responsibilities."
+    ],
+    suggestions: [
+      "Highlight top two projects that demonstrate the missing categories.",
+      "Mirror the JD keywords in your summary and skills section.",
+      "Lead each bullet with a strong action verb and a measurable outcome."
     ],
     keywordMatches: keywords.keywordMatches,
     missingKeywords: keywords.missingKeywords,
@@ -425,29 +404,12 @@ function heuristicAnalysis(cvText: string, jdText: string) {
   };
 }
 
-async function analyzeWithLLM(
-  cvText: string,
-  jdText: string,
-  salaryContext: string
+async function requestLLM(
+  apiKey: string,
+  model: string,
+  systemPrompt: string,
+  userPrompt: string
 ) {
-  const apiKey = process.env.GROQ_API_KEY;
-  if (!apiKey) {
-    return heuristicAnalysis(cvText, jdText);
-  }
-
-  const model = process.env.GROQ_MODEL || "llama-3.1-8b-instant";
-
-  const systemPrompt =
-    "You are a senior recruiter and ATS specialist. Return ONLY valid JSON with this schema: " +
-    "{ summary: string, gapAnalysis: string[], improvements: string[], " +
-    "keywordMatches: string[], missingKeywords: string[], bulletRewrites: string[], atsNotes: string[], " +
-    "compensationFit: number | null, compensationNotes: string[] }." +
-    "Do NOT compute a match score; it is computed separately. " +
-    "Write improvements as action-oriented imperatives (start with a verb). " +
-    "Gap analysis should be short phrases. Bullet rewrites must be concise, impact-focused.";
-
-  const userPrompt = `RESUME:\n"""\n${cvText}\n"""\n\nJOB DESCRIPTION:\n"""\n${jdText}\n"""\n\nSALARY CONTEXT:\n${salaryContext}`;
-
   const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -470,21 +432,100 @@ async function analyzeWithLLM(
   }
 
   const data = await response.json();
-  const text = data?.choices?.[0]?.message?.content || "";
-  const parsed = safeJsonParse(text);
+  return data?.choices?.[0]?.message?.content || "";
+}
 
-  if (parsed) return parsed;
+async function getLLMCategories(apiKey: string, model: string, jdText: string) {
+  const systemPrompt =
+    "You are a senior recruiter. Return ONLY valid JSON with this schema: " +
+    "{ keyCategories: string[] }. " +
+    "Provide exactly 6 key skill categories from the JD. " +
+    "Each category should be 1-4 words, title case, and represent a skill cluster.";
+
+  const userPrompt = `JOB DESCRIPTION:\n\"\"\"\n${jdText}\n\"\"\"`;
+
+  const text = await requestLLM(apiKey, model, systemPrompt, userPrompt);
+  const parsed = safeJsonParse(text);
+  const keyCategories = ensureStringArray(parsed?.keyCategories)
+    .map(formatCategory)
+    .slice(0, 6);
+
+  return keyCategories;
+}
+
+async function getLLMAssessment(
+  apiKey: string,
+  model: string,
+  cvText: string,
+  jdText: string,
+  keyCategories: string[]
+) {
+  const systemPrompt =
+    "You are a senior recruiter and ATS specialist. Return ONLY valid JSON with this schema: " +
+    "{ summary: string, matchedCategories: string[], missingCategories: string[], bonusCategories: string[], " +
+    "suggestions: string[], bulletRewrites: string[], atsNotes: string[] }. " +
+    "Rules: matchedCategories and missingCategories must be subsets of the provided key categories. " +
+    "bonusCategories are relevant categories found in the CV that are not in keyCategories. " +
+    "Suggestions must be actionable and specific (include an example action).";
+
+  const userPrompt = `KEY CATEGORIES:\n${keyCategories.join(", ")}\n\nRESUME:\n\"\"\"\n${cvText}\n\"\"\"\n\nJOB DESCRIPTION:\n\"\"\"\n${jdText}\n\"\"\"`;
+
+  const text = await requestLLM(apiKey, model, systemPrompt, userPrompt);
+  const parsed = safeJsonParse(text);
+  return parsed || {};
+}
+
+async function analyzeWithLLM(cvText: string, jdText: string) {
+  const apiKey = process.env.GROQ_API_KEY;
+  if (!apiKey) {
+    return heuristicAnalysis(cvText, jdText);
+  }
+
+  const model = process.env.GROQ_MODEL || "llama-3.1-8b-instant";
+
+  const keyCategories = await getLLMCategories(apiKey, model, jdText);
+  const assessment = await getLLMAssessment(
+    apiKey,
+    model,
+    cvText,
+    jdText,
+    keyCategories
+  );
+
+  const keyMap = new Map<string, string>();
+  for (const category of keyCategories) {
+    keyMap.set(normalizeCategory(category), category);
+  }
+
+  const matchedRaw = ensureStringArray(assessment?.matchedCategories);
+  const matchedNormalized = new Set(
+    matchedRaw
+      .map((item) => normalizeCategory(item))
+      .filter((item) => keyMap.has(item))
+  );
+  const matchedCategories = Array.from(matchedNormalized).map(
+    (item) => keyMap.get(item) || formatCategory(item)
+  );
+
+  const missingCategories = keyCategories.filter(
+    (category) => !matchedNormalized.has(normalizeCategory(category))
+  );
+
+  const bonusRaw = ensureStringArray(assessment?.bonusCategories)
+    .map(formatCategory)
+    .filter((item) => !keyMap.has(normalizeCategory(item)));
+  const bonusCategories = Array.from(new Set(bonusRaw)).slice(0, 8);
 
   return {
-    matchScore: 0,
-    summary: "Unable to parse LLM response. See raw output.",
-    gapAnalysis: [],
-    improvements: [],
-    keywordMatches: [],
-    missingKeywords: [],
-    bulletRewrites: [],
-    atsNotes: [],
-    raw: text
+    summary: assessment?.summary,
+    suggestions: ensureStringArray(assessment?.suggestions),
+    improvements: ensureStringArray(assessment?.suggestions),
+    bulletRewrites: ensureStringArray(assessment?.bulletRewrites),
+    atsNotes: ensureStringArray(assessment?.atsNotes),
+    keyCategories,
+    matchedCategories,
+    missingCategories,
+    bonusCategories
   };
 }
 
@@ -526,45 +567,41 @@ export async function POST(req: Request) {
     const roleRange = normalizeRange(jdSalaryMin, jdSalaryMax);
     const compensation = computeCompensationFit(candidateRange, roleRange);
 
-    const salaryContextParts = [
-      `Candidate expected range: ${
-        candidateRange ? `$${candidateRange.min} - $${candidateRange.max}` : "not provided"
-      }`,
-      `Role range: ${
-        roleRange ? `$${roleRange.min} - $${roleRange.max}` : "not provided"
-      }`
-    ];
+    const analysis = await analyzeWithLLM(cvText, jdText);
 
-    const analysis = await analyzeWithLLM(
-      cvText,
-      jdText,
-      salaryContextParts.join("\n")
-    );
-
-    const match = computeMatchScore(cvText, jdText);
     const keywordStats = extractKeywordStats(jdText, cvText);
-    const keySkills = Array.from(
-      new Set([
-        ...match.sectionTokens.requirements,
-        ...match.sectionTokens.responsibilities
-      ])
-    );
-    const bonusSkills = Array.from(new Set(match.sectionTokens.preferred));
-    const cvTokenSet = new Set(tokenize(cvText));
-    const keyMatched = keySkills.filter((skill) => cvTokenSet.has(skill));
-    const keyMissing = keySkills.filter((skill) => !cvTokenSet.has(skill));
-    const bonusMatched = bonusSkills.filter((skill) => cvTokenSet.has(skill));
-    const bonusMissing = bonusSkills.filter((skill) => !cvTokenSet.has(skill));
+    const keyCategories = Array.isArray(analysis.keyCategories)
+      ? analysis.keyCategories
+      : [];
+    const matchedCategories = Array.isArray(analysis.matchedCategories)
+      ? analysis.matchedCategories
+      : [];
+    const missingCategories = Array.isArray(analysis.missingCategories)
+      ? analysis.missingCategories
+      : keyCategories.filter(
+          (category) =>
+            !matchedCategories.some(
+              (item) => normalizeCategory(item) === normalizeCategory(category)
+            )
+        );
 
-    analysis.matchScore = match.score;
-    analysis.scoreBreakdown = match.breakdown;
-    analysis.sectionTokens = match.sectionTokens;
+    analysis.matchScore = computeCategoryMatchScore(
+      matchedCategories,
+      keyCategories.length
+    );
+    analysis.missingCategories = missingCategories;
 
     if (!Array.isArray(analysis.keywordMatches) || analysis.keywordMatches.length === 0) {
-      analysis.keywordMatches = keywordStats.keywordMatches;
+      analysis.keywordMatches = matchedCategories;
     }
     if (!Array.isArray(analysis.missingKeywords) || analysis.missingKeywords.length === 0) {
-      analysis.missingKeywords = keywordStats.missingKeywords;
+      analysis.missingKeywords = missingCategories;
+    }
+
+    if (!Array.isArray(analysis.gapAnalysis) || analysis.gapAnalysis.length === 0) {
+      analysis.gapAnalysis = missingCategories.map(
+        (category) => `Missing category: ${category}`
+      );
     }
 
     if (analysis.compensationFit === undefined || analysis.compensationFit === null) {
@@ -586,16 +623,7 @@ export async function POST(req: Request) {
       analysis,
       meta: {
         cvChars: cvText.length,
-        jdChars: jdText.length,
-        scoreBreakdown: match.breakdown,
-        skillBuckets: {
-          keySkills: keySkills.slice(0, 80),
-          bonusSkills: bonusSkills.slice(0, 40),
-          keyMatched: keyMatched.slice(0, 80),
-          keyMissing: keyMissing.slice(0, 80),
-          bonusMatched: bonusMatched.slice(0, 40),
-          bonusMissing: bonusMissing.slice(0, 40)
-        }
+        jdChars: jdText.length
       }
     });
   } catch (error) {

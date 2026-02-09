@@ -71,274 +71,287 @@ export default function Home() {
   };
 
   return (
-    <div className="relative min-h-screen px-6 pb-16 pt-12 sm:px-10">
+    <div className="relative min-h-screen overflow-hidden bg-slate-950 text-white">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(109,87,255,0.5),_transparent_60%)]" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_30%,_rgba(243,87,168,0.35),_transparent_55%)]" />
+      <div className="absolute inset-0 bg-gradient-to-br from-[#4b3cf5] via-[#6d50ff] to-[#f357a8] opacity-90" />
       <div className="noise" />
-      <div className="mx-auto max-w-6xl">
-        <header className="flex flex-col gap-10">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div className="inline-flex items-center gap-2 rounded-full bg-white/70 px-4 py-2 text-xs uppercase tracking-[0.2em] text-ink">
-              Resume Analyser · Action‑first insights
-            </div>
-            <div className="rounded-full border border-ink/10 bg-white/80 px-4 py-2 text-xs text-ink/70">
-              Unlimited analyses · No login
-            </div>
-          </div>
 
-          <div className="grid gap-8 lg:grid-cols-[1.1fr_0.9fr]">
-            <div className="space-y-5">
-              <h1 className="font-display text-4xl font-semibold leading-tight text-ink sm:text-5xl">
-                Build a resume that lands interviews — fast.
-              </h1>
-              <p className="max-w-xl text-lg text-ink/70">
-                Upload your resume and job description, then receive a clear
-                action plan, skill breakdown, and rewrite guidance.
-              </p>
-              <div className="flex flex-wrap gap-3 text-sm text-ink/70">
-                <span className="tag rounded-full px-3 py-1">PDF · DOCX · Text</span>
-                <span className="tag rounded-full px-3 py-1">Skill gaps</span>
-                <span className="tag rounded-full px-3 py-1">Rewrite playbook</span>
-                <span className="tag rounded-full px-3 py-1">Salary fit</span>
-              </div>
-            </div>
-            <div className="glass relative overflow-hidden rounded-3xl p-6">
-              <div className="absolute -right-12 -top-10 h-36 w-36 rounded-full bg-aqua/60 blur-2xl" />
-              <div className="absolute -bottom-10 left-10 h-32 w-32 rounded-full bg-coral/60 blur-2xl" />
-              <div className="relative space-y-4">
-                <h2 className="font-display text-2xl">Your 3‑step flow</h2>
-                <div className="grid gap-3 text-sm">
-                  <div className="rounded-2xl bg-white/80 p-4">
-                    <p className="font-semibold">Step 1 — Add resume</p>
-                    <p className="text-ink/70">Upload or paste your latest CV.</p>
-                  </div>
-                  <div className="rounded-2xl bg-white/80 p-4">
-                    <p className="font-semibold">Step 2 — Add JD</p>
-                    <p className="text-ink/70">Paste the job description.</p>
-                  </div>
-                  <div className="rounded-2xl bg-white/80 p-4">
-                    <p className="font-semibold">Step 3 — Get the plan</p>
-                    <p className="text-ink/70">Action items, skills, rewrites.</p>
-                  </div>
-                </div>
-              </div>
-            </div>
+      <div className="relative">
+        <header className="mx-auto flex max-w-6xl flex-col items-center px-6 pb-12 pt-16 text-center sm:px-10">
+          <div className="inline-flex items-center gap-2 rounded-full border border-white/30 bg-white/10 px-4 py-2 text-xs uppercase tracking-[0.2em]">
+            Resume Analyser · Premium insights
           </div>
+          <h1 className="mt-6 font-display text-4xl font-semibold sm:text-6xl">
+            Analyze your resume against any job
+          </h1>
+          <p className="mt-4 max-w-2xl text-base text-white/80 sm:text-lg">
+            Upload a resume, paste text, or drop a file — then match it against
+            any job description instantly with actionable next steps.
+          </p>
+          <div className="mt-6 flex flex-wrap justify-center gap-3 text-xs">
+            <span className="rounded-full border border-white/20 bg-white/15 px-4 py-2">
+              PDF · DOCX · TXT
+            </span>
+            <span className="rounded-full border border-white/20 bg-white/15 px-4 py-2">
+              Unlimited analyses
+            </span>
+            <span className="rounded-full border border-white/20 bg-white/15 px-4 py-2">
+              Skill gap mapping
+            </span>
+            <span className="rounded-full border border-white/20 bg-white/15 px-4 py-2">
+              Actionable rewrites
+            </span>
+          </div>
+          <a
+            href="#inputs"
+            className="mt-8 inline-flex items-center justify-center rounded-full bg-white px-6 py-3 text-sm font-semibold text-[#4b3cf5] shadow-lg"
+          >
+            Start analysis
+          </a>
         </header>
 
-        <main className="mt-12 grid gap-8 lg:grid-cols-[1.1fr_0.9fr]">
-          <section className="glass rounded-3xl p-6 sm:p-8">
-            <h2 className="font-display text-2xl">Inputs</h2>
-            <p className="text-sm text-ink/60">
-              Upload a file or paste text for both your resume and the JD.
-            </p>
-
-            <div className="mt-6 grid gap-6">
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-semibold">Resume (Step 1)</h3>
-                  <div className="flex gap-2 text-xs">
+        <main id="inputs" className="mx-auto max-w-6xl px-6 pb-20 sm:px-10">
+          <div className="rounded-[36px] border border-white/40 bg-white text-slate-900 shadow-2xl">
+            <div className="grid gap-6 p-6 lg:grid-cols-2 lg:p-8">
+              <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white">
+                <div className="bg-gradient-to-r from-[#5b5bf0] to-[#8b5cf6] px-5 py-4 text-white">
+                  <div className="flex items-center gap-2 text-sm font-semibold">
+                    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white/20">
+                      📄
+                    </span>
+                    Your Resume
+                  </div>
+                  <div className="mt-4 flex flex-wrap gap-2 text-xs">
                     <button
                       onClick={() => setCvMode("file")}
-                      className={`rounded-full px-3 py-1 ${
+                      className={`rounded-full px-4 py-1.5 ${
                         cvMode === "file"
-                          ? "bg-ink text-white"
-                          : "border border-ink/20 text-ink"
+                          ? "bg-white text-[#5b5bf0]"
+                          : "border border-white/40 text-white/80"
                       }`}
                     >
-                      Upload
+                      Upload File
                     </button>
                     <button
                       onClick={() => setCvMode("text")}
-                      className={`rounded-full px-3 py-1 ${
+                      className={`rounded-full px-4 py-1.5 ${
                         cvMode === "text"
-                          ? "bg-ink text-white"
-                          : "border border-ink/20 text-ink"
+                          ? "bg-white text-[#5b5bf0]"
+                          : "border border-white/40 text-white/80"
                       }`}
                     >
-                      Paste
+                      Paste Text
                     </button>
+                    <span className="rounded-full border border-white/30 px-4 py-1.5 text-white/60">
+                      LinkedIn URL (soon)
+                    </span>
                   </div>
                 </div>
-
-                {cvMode === "file" ? (
-                  <div className="rounded-2xl border border-dashed border-ink/20 bg-white/60 p-4">
-                    <input
-                      type="file"
-                      accept=".pdf,.docx,.txt"
-                      onChange={(event) => setCvFile(event.target.files?.[0] || null)}
+                <div className="p-6">
+                  {cvMode === "file" ? (
+                    <div className="rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50/70 p-6 text-center">
+                      <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-slate-200 text-lg">
+                        ⬆️
+                      </div>
+                      <p className="mt-3 text-sm font-medium text-slate-700">
+                        Drop a file or click to browse
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        PDF, DOCX, or TXT (max 6 MB)
+                      </p>
+                      <input
+                        type="file"
+                        accept=".pdf,.docx,.txt"
+                        onChange={(event) =>
+                          setCvFile(event.target.files?.[0] || null)
+                        }
+                        className="mt-4 w-full text-sm"
+                      />
+                      {cvFile && (
+                        <p className="mt-2 text-xs text-slate-500">
+                          {cvFile.name}
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    <textarea
+                      value={cvText}
+                      onChange={(event) => setCvText(event.target.value)}
+                      placeholder="Paste resume content here..."
+                      rows={7}
+                      className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm"
                     />
-                    {cvFile && (
-                      <p className="mt-2 text-xs text-ink/60">{cvFile.name}</p>
-                    )}
-                  </div>
-                ) : (
-                  <textarea
-                    value={cvText}
-                    onChange={(event) => setCvText(event.target.value)}
-                    placeholder="Paste resume content here..."
-                    rows={6}
-                    className="w-full rounded-2xl border border-ink/10 bg-white/80 p-3 text-sm"
-                  />
-                )}
+                  )}
+                </div>
               </div>
 
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-semibold">Job Description (Step 2)</h3>
-                  <div className="flex gap-2 text-xs">
+              <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white">
+                <div className="bg-gradient-to-r from-[#a855f7] to-[#ec4899] px-5 py-4 text-white">
+                  <div className="flex items-center gap-2 text-sm font-semibold">
+                    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white/20">
+                      💼
+                    </span>
+                    Job Description
+                  </div>
+                  <div className="mt-4 flex flex-wrap gap-2 text-xs">
                     <button
                       onClick={() => setJdMode("file")}
-                      className={`rounded-full px-3 py-1 ${
+                      className={`rounded-full px-4 py-1.5 ${
                         jdMode === "file"
-                          ? "bg-ink text-white"
-                          : "border border-ink/20 text-ink"
+                          ? "bg-white text-[#a855f7]"
+                          : "border border-white/40 text-white/80"
                       }`}
                     >
-                      Upload
+                      Upload File
                     </button>
                     <button
                       onClick={() => setJdMode("text")}
-                      className={`rounded-full px-3 py-1 ${
+                      className={`rounded-full px-4 py-1.5 ${
                         jdMode === "text"
-                          ? "bg-ink text-white"
-                          : "border border-ink/20 text-ink"
+                          ? "bg-white text-[#a855f7]"
+                          : "border border-white/40 text-white/80"
                       }`}
                     >
-                      Paste
+                      Paste Text
                     </button>
+                    <span className="rounded-full border border-white/30 px-4 py-1.5 text-white/60">
+                      Job URL (soon)
+                    </span>
+                  </div>
+                </div>
+                <div className="p-6">
+                  {jdMode === "file" ? (
+                    <div className="rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50/70 p-6 text-center">
+                      <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-slate-200 text-lg">
+                        ⬆️
+                      </div>
+                      <p className="mt-3 text-sm font-medium text-slate-700">
+                        Drop a file or click to browse
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        PDF, DOCX, or TXT (max 6 MB)
+                      </p>
+                      <input
+                        type="file"
+                        accept=".pdf,.docx,.txt"
+                        onChange={(event) =>
+                          setJdFile(event.target.files?.[0] || null)
+                        }
+                        className="mt-4 w-full text-sm"
+                      />
+                      {jdFile && (
+                        <p className="mt-2 text-xs text-slate-500">
+                          {jdFile.name}
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    <textarea
+                      value={jdText}
+                      onChange={(event) => setJdText(event.target.value)}
+                      placeholder="Paste job description here..."
+                      rows={7}
+                      className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm"
+                    />
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="border-t border-slate-200 px-6 pb-8 pt-6 lg:px-8">
+              <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
+                <div className="rounded-3xl bg-slate-50 p-5">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <h3 className="text-lg font-semibold">
+                      Compensation (optional)
+                    </h3>
+                    <span className="text-xs text-slate-500">Annual USD</span>
+                  </div>
+                  <p className="text-xs text-slate-500">
+                    Add ranges to compute a salary‑fit score. Leave empty if not
+                    applicable.
+                  </p>
+                  <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                    <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                      <p className="text-sm font-semibold">Candidate expectations</p>
+                      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                        <input
+                          type="number"
+                          min="0"
+                          value={cvSalaryMin}
+                          onChange={(event) => setCvSalaryMin(event.target.value)}
+                          placeholder="Min (e.g. 80000)"
+                          className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
+                        />
+                        <input
+                          type="number"
+                          min="0"
+                          value={cvSalaryMax}
+                          onChange={(event) => setCvSalaryMax(event.target.value)}
+                          placeholder="Max (e.g. 110000)"
+                          className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
+                        />
+                      </div>
+                    </div>
+                    <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                      <p className="text-sm font-semibold">Role range</p>
+                      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                        <input
+                          type="number"
+                          min="0"
+                          value={jdSalaryMin}
+                          onChange={(event) => setJdSalaryMin(event.target.value)}
+                          placeholder="Min (e.g. 90000)"
+                          className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
+                        />
+                        <input
+                          type="number"
+                          min="0"
+                          value={jdSalaryMax}
+                          onChange={(event) => setJdSalaryMax(event.target.value)}
+                          placeholder="Max (e.g. 120000)"
+                          className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
+                        />
+                      </div>
+                    </div>
                   </div>
                 </div>
 
-                {jdMode === "file" ? (
-                  <div className="rounded-2xl border border-dashed border-ink/20 bg-white/60 p-4">
-                    <input
-                      type="file"
-                      accept=".pdf,.docx,.txt"
-                      onChange={(event) => setJdFile(event.target.files?.[0] || null)}
-                    />
-                    {jdFile && (
-                      <p className="mt-2 text-xs text-ink/60">{jdFile.name}</p>
+                <div className="flex flex-col justify-between rounded-3xl border border-slate-200 bg-white p-5">
+                  <div>
+                    <h3 className="text-lg font-semibold">What you’ll get</h3>
+                    <p className="text-xs text-slate-500">
+                      A modern, action‑first results page.
+                    </p>
+                    <ul className="mt-4 space-y-2 text-sm text-slate-600">
+                      <li>Overall match percentage</li>
+                      <li>Skill gaps + bonus skills</li>
+                      <li>Rewrite recommendations</li>
+                      <li>ATS and compensation tips</li>
+                    </ul>
+                  </div>
+                  <div className="mt-6">
+                    {error && (
+                      <div className="rounded-2xl bg-rose-50 p-3 text-sm text-rose-600">
+                        {error}
+                      </div>
                     )}
-                  </div>
-                ) : (
-                  <textarea
-                    value={jdText}
-                    onChange={(event) => setJdText(event.target.value)}
-                    placeholder="Paste job description here..."
-                    rows={6}
-                    className="w-full rounded-2xl border border-ink/10 bg-white/80 p-3 text-sm"
-                  />
-                )}
-              </div>
-            </div>
-
-            <div className="mt-6 rounded-3xl bg-white/70 p-5">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <h3 className="text-lg font-semibold">Compensation (optional)</h3>
-                <span className="text-xs text-ink/60">Annual USD</span>
-              </div>
-              <p className="text-xs text-ink/60">
-                Add ranges to compute a salary‑fit score. Leave empty if not
-                applicable.
-              </p>
-              <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                <div className="rounded-2xl border border-ink/10 bg-white/80 p-4">
-                  <p className="text-sm font-semibold">Candidate expectations</p>
-                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                    <input
-                      type="number"
-                      min="0"
-                      value={cvSalaryMin}
-                      onChange={(event) => setCvSalaryMin(event.target.value)}
-                      placeholder="Min (e.g. 80000)"
-                      className="w-full rounded-xl border border-ink/10 bg-white px-3 py-2 text-sm"
-                    />
-                    <input
-                      type="number"
-                      min="0"
-                      value={cvSalaryMax}
-                      onChange={(event) => setCvSalaryMax(event.target.value)}
-                      placeholder="Max (e.g. 110000)"
-                      className="w-full rounded-xl border border-ink/10 bg-white px-3 py-2 text-sm"
-                    />
-                  </div>
-                </div>
-                <div className="rounded-2xl border border-ink/10 bg-white/80 p-4">
-                  <p className="text-sm font-semibold">Role range</p>
-                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                    <input
-                      type="number"
-                      min="0"
-                      value={jdSalaryMin}
-                      onChange={(event) => setJdSalaryMin(event.target.value)}
-                      placeholder="Min (e.g. 90000)"
-                      className="w-full rounded-xl border border-ink/10 bg-white px-3 py-2 text-sm"
-                    />
-                    <input
-                      type="number"
-                      min="0"
-                      value={jdSalaryMax}
-                      onChange={(event) => setJdSalaryMax(event.target.value)}
-                      placeholder="Max (e.g. 120000)"
-                      className="w-full rounded-xl border border-ink/10 bg-white px-3 py-2 text-sm"
-                    />
+                    <button
+                      onClick={handleAnalyze}
+                      disabled={loading}
+                      className="mt-4 w-full rounded-full bg-gradient-to-r from-[#4b3cf5] to-[#f357a8] px-6 py-3 text-sm font-semibold text-white shadow-lg disabled:opacity-60"
+                    >
+                      {loading ? "Analyzing..." : "Analyze Resume"}
+                    </button>
+                    <p className="mt-3 text-xs text-slate-500">
+                      Results open in a dedicated analysis view.
+                    </p>
                   </div>
                 </div>
               </div>
             </div>
-
-            {error && (
-              <div className="mt-4 rounded-2xl bg-coral/20 p-3 text-sm text-ink">
-                {error}
-              </div>
-            )}
-
-            <div className="mt-6 flex flex-wrap items-center gap-3">
-              <button
-                onClick={handleAnalyze}
-                disabled={loading}
-                className="rounded-full bg-gradient-to-r from-midnight to-berry px-6 py-3 text-sm text-white shadow-lg shadow-berry/20 disabled:opacity-60"
-              >
-                {loading ? "Analyzing..." : "Analyze Resume"}
-              </button>
-              <span className="text-xs text-ink/60">
-                Results open in a dedicated analysis view.
-              </span>
-            </div>
-          </section>
-
-          <section className="glass rounded-3xl p-6 sm:p-8">
-            <h2 className="font-display text-2xl">What you’ll get</h2>
-            <p className="text-sm text-ink/60">
-              A clean, multi‑section results page designed for action.
-            </p>
-            <div className="mt-6 grid gap-4">
-              <div className="rounded-2xl bg-white/80 p-4">
-                <p className="font-semibold">Overall match scoreboard</p>
-                <p className="text-sm text-ink/70">
-                  See an accurate match percentage with category coverage.
-                </p>
-              </div>
-              <div className="rounded-2xl bg-white/80 p-4">
-                <p className="font-semibold">Skill map</p>
-                <p className="text-sm text-ink/70">
-                  Skills are categorized into focused buckets with gaps called
-                  out.
-                </p>
-              </div>
-              <div className="rounded-2xl bg-white/80 p-4">
-                <p className="font-semibold">Rewrite guidance</p>
-                <p className="text-sm text-ink/70">
-                  Actionable rewrites and bullet upgrades you can apply fast.
-                </p>
-              </div>
-              <div className="rounded-2xl bg-white/80 p-4">
-                <p className="font-semibold">Bonus tips</p>
-                <p className="text-sm text-ink/70">
-                  ATS notes and extra advice tailored to the JD.
-                </p>
-              </div>
-            </div>
-          </section>
+          </div>
         </main>
       </div>
     </div>

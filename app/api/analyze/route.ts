@@ -11,6 +11,28 @@ const MAX_FILE_MB = 6;
 const MAX_CHARS = 12000;
 
 type SalaryRange = { min: number; max: number } | null;
+type ScoreInput = number | null | undefined;
+
+function normalizeWeight(value: number, fallback: number) {
+  if (!Number.isFinite(value) || value <= 0 || value >= 1) return fallback;
+  return value;
+}
+
+function computeOverallScore(
+  matchScore: ScoreInput,
+  compensationFit: ScoreInput
+) {
+  if (typeof matchScore !== "number") return null;
+  if (compensationFit === null || compensationFit === undefined) return matchScore;
+
+  const skillWeight = normalizeWeight(
+    Number(process.env.SKILL_WEIGHT ?? "0.8"),
+    0.8
+  );
+  const compWeight = 1 - skillWeight;
+
+  return Math.round(matchScore * skillWeight + compensationFit * compWeight);
+}
 
 function parseSalary(input: FormDataEntryValue | null) {
   if (!input) return null;
@@ -345,6 +367,11 @@ export async function POST(req: Request) {
     if (existingNotes.length === 0) {
       analysis.compensationNotes = compensation.notes;
     }
+
+    analysis.overallScore = computeOverallScore(
+      analysis.matchScore,
+      analysis.compensationFit
+    );
 
     if (!session && ipHash) {
       await prisma.usage.upsert({

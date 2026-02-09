@@ -15,6 +15,7 @@ type Analysis = {
   atsNotes?: string[];
   compensationFit?: number | null;
   compensationNotes?: string[];
+  overallScore?: number | null;
   raw?: string;
 };
 
@@ -29,6 +30,11 @@ const buildMarkdown = (analysis: Analysis, meta?: Meta) => {
   const lines = [
     "# Resume Analyser Report",
     "",
+    `Overall Score: ${
+      analysis.overallScore === null || analysis.overallScore === undefined
+        ? "N/A"
+        : `${analysis.overallScore}%`
+    }`,
     `Match Score: ${analysis.matchScore ?? "N/A"}%`,
     `Compensation Fit: ${
       analysis.compensationFit === null || analysis.compensationFit === undefined
@@ -557,6 +563,12 @@ export default function Home() {
             <div className="flex flex-wrap items-center justify-between gap-2">
               <h2 className="font-display text-2xl">Analysis</h2>
               <div className="flex flex-wrap gap-2">
+                {analysis?.overallScore !== undefined &&
+                  analysis?.overallScore !== null && (
+                    <span className="rounded-full bg-ink text-white px-3 py-1 text-sm">
+                      Overall {analysis.overallScore}%
+                    </span>
+                  )}
                 {analysis?.matchScore !== undefined && (
                   <span className="rounded-full bg-aqua/30 px-3 py-1 text-sm">
                     Match {analysis.matchScore}%

@@ -27,6 +27,7 @@ GITHUB_ID=YOUR_GITHUB_OAUTH_CLIENT_ID
 GITHUB_SECRET=YOUR_GITHUB_OAUTH_CLIENT_SECRET
 DATABASE_URL=postgresql://user:pass@host:5432/dbname
 RATE_LIMIT_SALT=LONG_RANDOM_STRING
+SKILL_WEIGHT=0.8
 ```
 
 3) Run migrations + generate Prisma client
@@ -45,6 +46,7 @@ npm run dev
 - One free analysis is enforced server‑side by IP hash. Authenticated users are unlimited.
 - Report downloads are available in Markdown and PDF.
 - Render deployment: set the env vars above and use `npm run build` + `npm run start`.
+- Overall score uses `SKILL_WEIGHT` for the match score and `1 - SKILL_WEIGHT` for salary fit.
 
 ## Deploy (Render)
 - Create a new Web Service from this repo.

@@ -4,6 +4,7 @@ import crypto from "crypto";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { Prisma } from "@prisma/client";
 
 export const runtime = "nodejs";
 
@@ -110,6 +111,20 @@ function hashIp(ip: string) {
     throw new Error("RATE_LIMIT_SALT is not configured.");
   }
   return crypto.createHmac("sha256", salt).update(ip).digest("hex");
+}
+
+async function ensureUsageTable() {
+  await prisma.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS "Usage" (
+    "id" TEXT NOT NULL,
+    "ipHash" TEXT NOT NULL,
+    "count" INTEGER NOT NULL DEFAULT 0,
+    "firstSeenAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "lastUsedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "Usage_pkey" PRIMARY KEY ("id")
+  );`);
+  await prisma.$executeRawUnsafe(
+    `CREATE UNIQUE INDEX IF NOT EXISTS "Usage_ipHash_key" ON "Usage"("ipHash");`
+  );
 }
 
 function getExtension(name: string) {
@@ -298,7 +313,21 @@ export async function POST(req: Request) {
       }
 
       ipHash = hashIp(ip);
-      const usage = await prisma.usage.findUnique({ where: { ipHash } });
+      let usage = null;
+      try {
+        usage = await prisma.usage.findUnique({ where: { ipHash } });
+      } catch (error) {
+        if (
+          error instanceof Prisma.PrismaClientKnownRequestError &&
+          error.code === "P2021"
+        ) {
+          await ensureUsageTable();
+          usage = await prisma.usage.findUnique({ where: { ipHash } });
+        } else {
+          throw error;
+        }
+      }
+
       if (usage && usage.count >= 1) {
         return Response.json(
           { error: "Free analysis used. Sign in with GitHub to continue." },

@@ -27,7 +27,7 @@ type InputMode = "file" | "text";
 
 const buildMarkdown = (analysis: Analysis, meta?: Meta) => {
   const lines = [
-    "# CV Analyzer Report",
+    "# Resume Analyser Report",
     "",
     `Match Score: ${analysis.matchScore ?? "N/A"}%`,
     `Compensation Fit: ${
@@ -37,7 +37,7 @@ const buildMarkdown = (analysis: Analysis, meta?: Meta) => {
     }`,
     analysis.summary ? `Summary: ${analysis.summary}` : "",
     "",
-    meta ? `CV chars: ${meta.cvChars} | JD chars: ${meta.jdChars}` : "",
+            meta ? `Resume chars: ${meta.cvChars} | JD chars: ${meta.jdChars}` : "",
     "",
     "## Compensation Notes",
     ...(Array.isArray(analysis.compensationNotes)
@@ -106,11 +106,11 @@ export default function Home() {
     }
 
     if (cvMode === "file" && !cvFile) {
-      setError("Please upload a CV file.");
+      setError("Please upload a resume file.");
       return;
     }
     if (cvMode === "text" && !cvText.trim()) {
-      setError("Please paste your CV text.");
+      setError("Please paste your resume text.");
       return;
     }
     if (jdMode === "file" && !jdFile) {
@@ -258,7 +258,7 @@ export default function Home() {
         <header className="flex flex-col gap-8">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="inline-flex items-center gap-2 rounded-full bg-white/70 px-4 py-2 text-xs uppercase tracking-[0.2em] text-ink">
-              CV Analyzer · ATS‑aware insights
+              Resume Analyser · ATS‑aware insights
             </div>
             <div className="flex items-center gap-3">
               {session ? (
@@ -281,10 +281,10 @@ export default function Home() {
           <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
             <div className="space-y-4">
               <h1 className="font-display text-4xl font-semibold leading-tight text-ink sm:text-5xl">
-                Pinpoint the gap between your CV and the job description.
+                Pinpoint the gap between your resume and the job description.
               </h1>
               <p className="max-w-xl text-lg text-ink/70">
-                Upload or paste your CV and JD to get a match score, compensation
+                Upload or paste your resume and JD to get a match score, compensation
                 fit, targeted gaps, and crisp improvements. One free analysis,
                 then GitHub sign‑in to continue.
               </p>
@@ -323,13 +323,13 @@ export default function Home() {
           <section className="glass rounded-3xl p-6 sm:p-8">
             <h2 className="font-display text-2xl">Inputs</h2>
             <p className="text-sm text-ink/60">
-              Upload a file or paste text for both CV and JD.
+              Upload a file or paste text for both your resume and the JD.
             </p>
 
             <div className="mt-6 grid gap-6">
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-semibold">CV</h3>
+                  <h3 className="text-lg font-semibold">Resume</h3>
                   <div className="flex gap-2 text-xs">
                     <button
                       onClick={() => setCvMode("file")}
@@ -369,7 +369,7 @@ export default function Home() {
                   <textarea
                     value={cvText}
                     onChange={(event) => setCvText(event.target.value)}
-                    placeholder="Paste CV content here..."
+                    placeholder="Paste resume content here..."
                     rows={6}
                     className="w-full rounded-2xl border border-ink/10 bg-white/80 p-3 text-sm"
                   />
@@ -380,15 +380,15 @@ export default function Home() {
                     onClick={() => downloadFile(cvFile)}
                     className="text-xs underline text-ink/70"
                   >
-                    Download CV file
+                    Download resume file
                   </button>
                 )}
                 {cvMode === "text" && cvText.trim() && (
                   <button
-                    onClick={() => downloadInput(cvText, "cv-text.txt")}
+                    onClick={() => downloadInput(cvText, "resume-text.txt")}
                     className="text-xs underline text-ink/70"
                   >
-                    Download CV text
+                    Download resume text
                   </button>
                 )}
               </div>
@@ -527,7 +527,7 @@ export default function Home() {
                 disabled={loading}
                 className="rounded-full bg-ink px-6 py-3 text-sm text-white disabled:opacity-60"
               >
-                {loading ? "Analyzing..." : "Analyze CV"}
+                {loading ? "Analyzing..." : "Analyze Resume"}
               </button>
               {!canAnalyze && (
                 <span className="text-xs text-ink/60">

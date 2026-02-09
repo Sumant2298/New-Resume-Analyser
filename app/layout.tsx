@@ -15,8 +15,9 @@ const fraunces = Fraunces({
 });
 
 export const metadata = {
-  title: "CV Analyzer",
-  description: "Analyze a CV against a JD with match scoring and improvements."
+  title: "Resume Analyser",
+  description:
+    "Analyze a resume against a job description with match scoring and improvements."
 };
 
 export default function RootLayout({

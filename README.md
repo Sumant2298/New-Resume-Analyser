@@ -1,6 +1,6 @@
-# CV Analyzer (MVP)
+# Resume Analyser (MVP)
 
-Upload a CV + JD, get a match score, compensation fit, gap analysis, and actionable CV improvements. Includes a one‑free‑analysis gate and GitHub OAuth for additional analyses.
+Upload a resume + JD, get a match score, compensation fit, gap analysis, and actionable resume improvements. Includes a one‑free‑analysis gate and GitHub OAuth for additional analyses.
 
 ## Stack
 - Next.js (App Router)
@@ -41,7 +41,7 @@ npm run dev
 ```
 
 ## Notes
-- CV/JD files are processed in memory only and not stored on the server.
+- Resume/JD files are processed in memory only and not stored on the server.
 - One free analysis is enforced server‑side by IP hash. Authenticated users are unlimited.
 - Report downloads are available in Markdown and PDF.
 - Render deployment: set the env vars above and use `npm run build` + `npm run start`.

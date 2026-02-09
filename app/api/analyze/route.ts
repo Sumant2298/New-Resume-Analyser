@@ -188,7 +188,7 @@ function heuristicAnalysis(cvText: string, jdText: string) {
     bulletRewrites: [],
     atsNotes: [
       "Use standard section headings (Experience, Skills, Education).",
-      "Avoid tables or complex formatting in the CV file."
+      "Avoid tables or complex formatting in the resume file."
     ]
   };
 }
@@ -212,7 +212,7 @@ async function analyzeWithLLM(
     "compensationFit: number | null, compensationNotes: string[] }." +
     "Match score is a percentage based on fit to the JD.";
 
-  const userPrompt = `CV:\n"""\n${cvText}\n"""\n\nJOB DESCRIPTION:\n"""\n${jdText}\n"""\n\nSALARY CONTEXT:\n${salaryContext}`;
+  const userPrompt = `RESUME:\n"""\n${cvText}\n"""\n\nJOB DESCRIPTION:\n"""\n${jdText}\n"""\n\nSALARY CONTEXT:\n${salaryContext}`;
 
   const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
     method: "POST",
@@ -312,7 +312,7 @@ export async function POST(req: Request) {
 
     if (!cvText || !jdText) {
       return Response.json(
-        { error: "Please provide both a CV and a Job Description." },
+        { error: "Please provide both a resume and a Job Description." },
         { status: 400 }
       );
     }

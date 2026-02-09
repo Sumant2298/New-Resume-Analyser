@@ -8,6 +8,25 @@ const MAX_CHARS = 12000;
 
 type SalaryRange = { min: number; max: number } | null;
 type ScoreInput = number | null | undefined;
+type AnalysisPayload = {
+  matchScore?: number;
+  overallScore?: number | null;
+  summary?: string;
+  gapAnalysis?: string[];
+  improvements?: string[];
+  suggestions?: string[];
+  keywordMatches?: string[];
+  missingKeywords?: string[];
+  bulletRewrites?: string[];
+  atsNotes?: string[];
+  compensationFit?: number | null;
+  compensationNotes?: string[];
+  keyCategories?: string[];
+  matchedCategories?: string[];
+  missingCategories?: string[];
+  bonusCategories?: string[];
+  raw?: string;
+};
 
 
 const STOPWORDS = new Set([
@@ -365,7 +384,7 @@ function extractKeywordStats(jdText: string, cvText: string) {
   };
 }
 
-function heuristicAnalysis(cvText: string, jdText: string) {
+function heuristicAnalysis(cvText: string, jdText: string): AnalysisPayload {
   const categories = fallbackCategoryAnalysis(cvText, jdText);
   const keywords = extractKeywordStats(jdText, cvText);
   const matchScore = computeCategoryMatchScore(
@@ -475,7 +494,10 @@ async function getLLMAssessment(
   return parsed || {};
 }
 
-async function analyzeWithLLM(cvText: string, jdText: string) {
+async function analyzeWithLLM(
+  cvText: string,
+  jdText: string
+): Promise<AnalysisPayload> {
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) {
     return heuristicAnalysis(cvText, jdText);
@@ -567,7 +589,7 @@ export async function POST(req: Request) {
     const roleRange = normalizeRange(jdSalaryMin, jdSalaryMax);
     const compensation = computeCompensationFit(candidateRange, roleRange);
 
-    const analysis = await analyzeWithLLM(cvText, jdText);
+    const analysis: AnalysisPayload = await analyzeWithLLM(cvText, jdText);
 
     const keywordStats = extractKeywordStats(jdText, cvText);
     const keyCategories = Array.isArray(analysis.keyCategories)

@@ -20,7 +20,7 @@ pip install -r requirements.txt
 Create an API key in Google AI Studio and set:
 ```bash
 GEMINI_API_KEY=YOUR_KEY
-GEMINI_MODEL=gemini-2.5-flash
+GEMINI_MODEL=gemini-1.5-pro
 GEMINI_TIMEOUT=45
 LLM_ONLY=true
 ```

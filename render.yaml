@@ -17,7 +17,7 @@ services:
       - key: GEMINI_API_KEY
         sync: false
       - key: GEMINI_MODEL
-        value: gemini-2.5-flash
+        value: gemini-1.5-pro
       - key: GEMINI_TIMEOUT
         value: "45"
       - key: LLM_ONLY

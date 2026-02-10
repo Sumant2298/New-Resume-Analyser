@@ -1,7 +1,8 @@
 services:
   - type: web
     name: new-resume-analyser
-    runtime: python
+    env: python
+    plan: free
     buildCommand: ./build.sh
     startCommand: gunicorn app:app
     envVars:

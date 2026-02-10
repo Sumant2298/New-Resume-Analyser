@@ -1,7 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import {
+  GoogleAuthProvider,
+  User,
+  onAuthStateChanged,
+  signInWithPopup,
+  signOut
+} from "firebase/auth";
+import { auth } from "@/lib/firebaseClient";
 
 type InputMode = "file" | "text";
 
@@ -19,9 +27,45 @@ export default function Home() {
   const [jdSalaryMax, setJdSalaryMax] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [authUser, setAuthUser] = useState<User | null>(null);
+  const [authReady, setAuthReady] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setAuthUser(user);
+      setAuthReady(true);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  const handleSignIn = async () => {
+    setAuthError(null);
+    try {
+      const provider = new GoogleAuthProvider();
+      await signInWithPopup(auth, provider);
+    } catch (err) {
+      setAuthError(err instanceof Error ? err.message : "Unable to sign in.");
+    }
+  };
+
+  const handleSignOut = async () => {
+    setAuthError(null);
+    try {
+      await signOut(auth);
+    } catch (err) {
+      setAuthError(err instanceof Error ? err.message : "Unable to sign out.");
+    }
+  };
 
   const handleAnalyze = async () => {
     setError(null);
+
+    if (!authUser) {
+      setError("Please sign in with Google to analyze.");
+      return;
+    }
 
     if (cvMode === "file" && !cvFile) {
       setError("Please upload a resume file.");
@@ -52,8 +96,12 @@ export default function Home() {
 
     try {
       setLoading(true);
+      const token = await authUser.getIdToken();
       const response = await fetch("/api/analyze", {
         method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`
+        },
         body: formData
       });
       const data = await response.json();
@@ -72,6 +120,40 @@ export default function Home() {
 
   return (
     <div className="min-h-screen px-6 pb-16 pt-16 sm:px-10">
+      <div className="mx-auto flex max-w-6xl justify-end">
+        {!authReady ? (
+          <span className="text-xs text-slate-500">Checking sign-in…</span>
+        ) : authUser ? (
+          <div className="flex items-center gap-3 text-xs text-slate-600">
+            <span>
+              Signed in as{" "}
+              <span className="font-semibold text-slate-800">
+                {authUser.email || "Google user"}
+              </span>
+            </span>
+            <button
+              onClick={handleSignOut}
+              className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs text-slate-700"
+            >
+              Sign out
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={handleSignIn}
+            className="rounded-full bg-blue-600 px-4 py-2 text-xs font-semibold text-white"
+          >
+            Sign in with Google
+          </button>
+        )}
+      </div>
+
+      {authError && (
+        <div className="mx-auto mt-3 max-w-6xl rounded-2xl bg-rose-50 px-4 py-3 text-xs text-rose-600">
+          {authError}
+        </div>
+      )}
+
       <div className="mx-auto max-w-6xl text-center">
         <h1 className="font-display text-4xl font-semibold text-slate-900 sm:text-5xl">
           CV & Job Description Matcher
@@ -291,10 +373,14 @@ export default function Home() {
                 )}
                 <button
                   onClick={handleAnalyze}
-                  disabled={loading}
+                  disabled={loading || !authUser}
                   className="mt-4 w-full rounded-full bg-blue-600 px-6 py-3 text-sm font-semibold text-white shadow disabled:opacity-60"
                 >
-                  {loading ? "Analyzing..." : "Analyze Match"}
+                  {loading
+                    ? "Analyzing..."
+                    : authUser
+                    ? "Analyze Match"
+                    : "Sign in to Analyze"}
                 </button>
               </div>
             </div>

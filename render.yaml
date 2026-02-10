@@ -1,14 +1,28 @@
 services:
   - type: web
-    name: resume-analyser
+    name: new-resume-analyser
     env: node
     plan: free
     buildCommand: npm install && npm run build
     startCommand: npm run start
     envVars:
-      - key: GROQ_API_KEY
+      - key: GEMINI_API_KEY
         sync: false
-      - key: GROQ_MODEL
-        value: llama-3.1-8b-instant
+      - key: GEMINI_MODEL
+        value: gemini-1.5-flash
       - key: SKILL_WEIGHT
         value: 0.8
+      - key: FIREBASE_SERVICE_ACCOUNT_KEY
+        sync: false
+      - key: NEXT_PUBLIC_FIREBASE_API_KEY
+        sync: false
+      - key: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+        sync: false
+      - key: NEXT_PUBLIC_FIREBASE_PROJECT_ID
+        sync: false
+      - key: NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+        sync: false
+      - key: NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
+        sync: false
+      - key: NEXT_PUBLIC_FIREBASE_APP_ID
+        sync: false

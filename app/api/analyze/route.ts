@@ -1,5 +1,7 @@
 import pdf from "pdf-parse";
 import mammoth from "mammoth";
+import { FieldValue } from "firebase-admin/firestore";
+import { getAdmin } from "@/lib/firebaseAdmin";
 
 export const runtime = "nodejs";
 
@@ -8,6 +10,7 @@ const MAX_CHARS = 12000;
 
 type SalaryRange = { min: number; max: number } | null;
 type ScoreInput = number | null | undefined;
+
 type AnalysisPayload = {
   matchScore?: number;
   overallScore?: number | null;
@@ -27,7 +30,6 @@ type AnalysisPayload = {
   bonusCategories?: string[];
   raw?: string;
 };
-
 
 const STOPWORDS = new Set([
   "the",
@@ -198,7 +200,6 @@ function computeCompensationFit(
   return { score: Math.max(0, Math.min(100, score)), notes };
 }
 
-
 function getExtension(name: string) {
   const parts = name.split(".");
   if (parts.length < 2) return "";
@@ -285,44 +286,6 @@ function computeCategoryMatchScore(matched: string[], total: number) {
   return Math.round((matched.length / total) * 100);
 }
 
-function splitJDSections(jdText: string) {
-  const sections = {
-    requirements: "",
-    responsibilities: "",
-    preferred: "",
-    other: ""
-  };
-
-  const reqPattern =
-    /\b(requirements|qualifications|must have|what you bring|skills)\b/i;
-  const respPattern =
-    /\b(responsibilities|what you'll do|what you will do|role|day[- ]to[- ]day)\b/i;
-  const prefPattern = /\b(nice to have|preferred|bonus|plus|good to have)\b/i;
-
-  let current: keyof typeof sections = "other";
-  const lines = jdText.split(/\n+/);
-
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (!trimmed) continue;
-    if (reqPattern.test(trimmed)) {
-      current = "requirements";
-      continue;
-    }
-    if (respPattern.test(trimmed)) {
-      current = "responsibilities";
-      continue;
-    }
-    if (prefPattern.test(trimmed)) {
-      current = "preferred";
-      continue;
-    }
-    sections[current] += ` ${trimmed}`;
-  }
-
-  return sections;
-}
-
 function fallbackCategoryAnalysis(cvText: string, jdText: string) {
   const jdTokens = uniqueTokens(jdText).slice(0, 6);
   const keyCategories = jdTokens.map(formatCategory);
@@ -399,7 +362,7 @@ function heuristicAnalysis(cvText: string, jdText: string): AnalysisPayload {
     missingCategories: categories.missingCategories,
     bonusCategories: categories.bonusCategories,
     summary:
-      "Heuristic analysis (no LLM key found). Configure GROQ_API_KEY for deeper insights.",
+      "Heuristic analysis (Gemini not configured). Add GEMINI_API_KEY for deeper insights.",
     gapAnalysis: categories.missingCategories.map(
       (category) => `Missing category: ${category}`
     ),
@@ -423,35 +386,42 @@ function heuristicAnalysis(cvText: string, jdText: string): AnalysisPayload {
   };
 }
 
-async function requestLLM(
+async function requestGemini(
   apiKey: string,
   model: string,
   systemPrompt: string,
   userPrompt: string
 ) {
-  const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+  const response = await fetch(url, {
     method: "POST",
     headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`
+      "Content-Type": "application/json"
     },
     body: JSON.stringify({
-      model,
-      temperature: 0.2,
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt }
+      systemInstruction: {
+        parts: [{ text: systemPrompt }]
+      },
+      generationConfig: {
+        temperature: 0.2
+      },
+      contents: [
+        {
+          role: "user",
+          parts: [{ text: userPrompt }]
+        }
       ]
     })
   });
 
   if (!response.ok) {
     const message = await response.text();
-    throw new Error(`LLM error: ${message}`);
+    throw new Error(`Gemini error: ${message}`);
   }
 
   const data = await response.json();
-  return data?.choices?.[0]?.message?.content || "";
+  const parts = data?.candidates?.[0]?.content?.parts || [];
+  return parts.map((part: { text?: string }) => part.text || "").join("");
 }
 
 async function getLLMCategories(apiKey: string, model: string, jdText: string) {
@@ -463,7 +433,7 @@ async function getLLMCategories(apiKey: string, model: string, jdText: string) {
 
   const userPrompt = `JOB DESCRIPTION:\n\"\"\"\n${jdText}\n\"\"\"`;
 
-  const text = await requestLLM(apiKey, model, systemPrompt, userPrompt);
+  const text = await requestGemini(apiKey, model, systemPrompt, userPrompt);
   const parsed = safeJsonParse(text);
   const keyCategories = ensureStringArray(parsed?.keyCategories)
     .map(formatCategory)
@@ -489,23 +459,27 @@ async function getLLMAssessment(
 
   const userPrompt = `KEY CATEGORIES:\n${keyCategories.join(", ")}\n\nRESUME:\n\"\"\"\n${cvText}\n\"\"\"\n\nJOB DESCRIPTION:\n\"\"\"\n${jdText}\n\"\"\"`;
 
-  const text = await requestLLM(apiKey, model, systemPrompt, userPrompt);
+  const text = await requestGemini(apiKey, model, systemPrompt, userPrompt);
   const parsed = safeJsonParse(text);
   return parsed || {};
 }
 
-async function analyzeWithLLM(
+async function analyzeWithGemini(
   cvText: string,
   jdText: string
 ): Promise<AnalysisPayload> {
-  const apiKey = process.env.GROQ_API_KEY;
+  const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     return heuristicAnalysis(cvText, jdText);
   }
 
-  const model = process.env.GROQ_MODEL || "llama-3.1-8b-instant";
+  const model = process.env.GEMINI_MODEL || "gemini-1.5-flash";
 
   const keyCategories = await getLLMCategories(apiKey, model, jdText);
+  if (keyCategories.length < 3) {
+    return heuristicAnalysis(cvText, jdText);
+  }
+
   const assessment = await getLLMAssessment(
     apiKey,
     model,
@@ -553,6 +527,22 @@ async function analyzeWithLLM(
 
 export async function POST(req: Request) {
   try {
+    const authHeader = req.headers.get("authorization") || "";
+    const token = authHeader.startsWith("Bearer ")
+      ? authHeader.slice(7)
+      : null;
+
+    if (!token) {
+      return Response.json(
+        { error: "Please sign in with Google to analyze." },
+        { status: 401 }
+      );
+    }
+
+    const { auth, db } = getAdmin();
+    const decoded = await auth.verifyIdToken(token);
+    const userId = decoded.uid;
+
     const formData = await req.formData();
 
     const cvTextInput = (formData.get("cvText") as string | null) || "";
@@ -589,7 +579,7 @@ export async function POST(req: Request) {
     const roleRange = normalizeRange(jdSalaryMin, jdSalaryMax);
     const compensation = computeCompensationFit(candidateRange, roleRange);
 
-    const analysis: AnalysisPayload = await analyzeWithLLM(cvText, jdText);
+    const analysis: AnalysisPayload = await analyzeWithGemini(cvText, jdText);
 
     const keywordStats = extractKeywordStats(jdText, cvText);
     const keyCategories = Array.isArray(analysis.keyCategories)
@@ -614,10 +604,10 @@ export async function POST(req: Request) {
     analysis.missingCategories = missingCategories;
 
     if (!Array.isArray(analysis.keywordMatches) || analysis.keywordMatches.length === 0) {
-      analysis.keywordMatches = matchedCategories;
+      analysis.keywordMatches = keywordStats.keywordMatches;
     }
     if (!Array.isArray(analysis.missingKeywords) || analysis.missingKeywords.length === 0) {
-      analysis.missingKeywords = missingCategories;
+      analysis.missingKeywords = keywordStats.missingKeywords;
     }
 
     if (!Array.isArray(analysis.gapAnalysis) || analysis.gapAnalysis.length === 0) {
@@ -641,6 +631,27 @@ export async function POST(req: Request) {
       analysis.compensationFit
     );
 
+    await db.collection("analyses").add({
+      userId,
+      createdAt: FieldValue.serverTimestamp(),
+      matchScore: analysis.matchScore ?? null,
+      overallScore: analysis.overallScore ?? null,
+      keyCategories,
+      matchedCategories,
+      missingCategories,
+      bonusCategories: analysis.bonusCategories || [],
+      summary: analysis.summary || null
+    });
+
+    await db.collection("users").doc(userId).set(
+      {
+        email: decoded.email || null,
+        lastAnalysisAt: FieldValue.serverTimestamp(),
+        totalAnalyses: FieldValue.increment(1)
+      },
+      { merge: true }
+    );
+
     return Response.json({
       analysis,
       meta: {
@@ -651,6 +662,7 @@ export async function POST(req: Request) {
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Unexpected server error";
-    return Response.json({ error: message }, { status: 500 });
+    const status = message.includes("verify") || message.includes("sign in") ? 401 : 500;
+    return Response.json({ error: message }, { status });
   }
 }

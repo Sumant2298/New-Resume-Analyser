@@ -6,9 +6,11 @@ Graceful degradation:
 - If the API call fails, the app continues with NLP-only analysis.
 """
 
+import ast
 import json
 import logging
 import os
+import re
 
 import requests
 
@@ -155,14 +157,29 @@ def _safe_json_parse(text: str):
     try:
         return json.loads(text)
     except Exception:
-        start = text.find('{')
-        end = text.rfind('}')
+        if not text:
+            return None
+        cleaned = text.strip()
+        cleaned = re.sub(r'```(?:json)?', '', cleaned, flags=re.IGNORECASE).strip()
+        start = cleaned.find('{')
+        end = cleaned.rfind('}')
         if start != -1 and end != -1 and end > start:
+            cleaned = cleaned[start:end + 1]
+
+        # Remove trailing commas
+        cleaned = re.sub(r',\s*([}\]])', r'\1', cleaned)
+
+        try:
+            return json.loads(cleaned)
+        except Exception:
+            # Last-resort: Python literal eval with JSON bool/null fixups
+            py_like = re.sub(r'\btrue\b', 'True', cleaned, flags=re.IGNORECASE)
+            py_like = re.sub(r'\bfalse\b', 'False', py_like, flags=re.IGNORECASE)
+            py_like = re.sub(r'\bnull\b', 'None', py_like, flags=re.IGNORECASE)
             try:
-                return json.loads(text[start:end + 1])
+                return ast.literal_eval(py_like)
             except Exception:
                 return None
-        return None
 
 
 def _call_gemini(system_prompt: str, user_prompt: str,
@@ -250,7 +267,13 @@ Rules:
 """
 
     try:
-        raw = _call_gemini(SYSTEM_PROMPT, user_prompt, temperature=0.2, max_output_tokens=800)
+        raw = _call_gemini(
+            SYSTEM_PROMPT,
+            user_prompt,
+            temperature=0.2,
+            max_output_tokens=800,
+            response_mime_type="application/json",
+        )
         parsed = _safe_json_parse(raw) or {}
         return parsed
     except Exception as exc:
@@ -287,7 +310,13 @@ Rules:
 """
 
     try:
-        raw = _call_gemini(SYSTEM_PROMPT, prompt, temperature=0.2, max_output_tokens=700)
+        raw = _call_gemini(
+            SYSTEM_PROMPT,
+            prompt,
+            temperature=0.2,
+            max_output_tokens=700,
+            response_mime_type="application/json",
+        )
         data = _safe_json_parse(raw) or {}
         groups = data.get('skill_groups', [])
         validated = []
@@ -478,6 +507,144 @@ Rules:
 # Recruiter insights (LLM suggestions, ATS score, etc.)
 # ---------------------------------------------------------------------------
 
+def generate_llm_scores_quickmatch(cv_text: str, jd_text: str) -> dict:
+    if not LLM_ENABLED:
+        logger.info('Gemini disabled (no GEMINI_API_KEY)')
+        return {}
+
+    meta = {'enabled': True, 'model': GEMINI_MODEL, 'status': 'pending'}
+    cv_truncated = cv_text[:2800]
+    jd_truncated = jd_text[:2000]
+
+    prompt = f"""Return ONLY JSON with this schema:
+{{
+  "scores": {{
+    "ats": 0,
+    "text_similarity": 0,
+    "skill_match": 0,
+    "verb_alignment": 0
+  }},
+  "quick_match": {{
+    "experience": {{"cv_value": "...", "jd_value": "...", "match_quality": "Strong Match|Good Match|Weak Match|Not a Match"}},
+    "education": {{"cv_value": "...", "jd_value": "...", "match_quality": "Strong Match|Good Match|Weak Match|Not a Match"}},
+    "skills": {{"cv_value": "...", "jd_value": "...", "match_quality": "Strong Match|Good Match|Weak Match|Not a Match"}},
+    "location": {{"cv_value": "...", "jd_value": "...", "match_quality": "Strong Match|Good Match|Weak Match|Not a Match"}}
+  }},
+  "keywords": {{
+    "jd": ["keyword1", "keyword2"],
+    "cv": ["keyword1", "keyword2"]
+  }}
+}}
+
+Rules:
+- scores are 0-100 numbers
+- If a value is missing in CV or JD, use "Not specified"
+- keywords.jd and keywords.cv should each have 8-12 items
+- Return ONLY JSON
+
+JOB DESCRIPTION:
+\"\"\"
+{jd_truncated}
+\"\"\"
+
+RESUME:
+\"\"\"
+{cv_truncated}
+\"\"\"
+"""
+
+    try:
+        raw = _call_gemini(
+            SYSTEM_PROMPT,
+            prompt,
+            temperature=0.1,
+            max_output_tokens=700,
+            response_mime_type="application/json",
+        )
+        parsed = _safe_json_parse(raw) or {}
+        if not isinstance(parsed, dict) or not parsed:
+            meta['status'] = 'empty'
+            meta['error'] = 'No JSON parsed from Gemini response'
+            return {'_meta': meta}
+        meta['status'] = 'ok'
+        parsed['_meta'] = meta
+        return parsed
+    except Exception as exc:
+        logger.warning('Gemini scores/quick-match failed: %s', exc)
+        meta['status'] = 'error'
+        meta['error'] = str(exc)[:200]
+        return {'_meta': meta}
+
+
+def generate_llm_categories(cv_text: str, jd_text: str) -> dict:
+    if not LLM_ENABLED:
+        logger.info('Gemini disabled (no GEMINI_API_KEY)')
+        return {}
+
+    meta = {'enabled': True, 'model': GEMINI_MODEL, 'status': 'pending'}
+    cv_truncated = cv_text[:3200]
+    jd_truncated = jd_text[:2200]
+
+    prompt = f"""Return ONLY JSON with this schema:
+{{
+  "key_categories": ["Category 1", "Category 2", "Category 3", "Category 4", "Category 5", "Category 6"],
+  "matched_categories": ["Category 1"],
+  "missing_categories": ["Category 2"],
+  "bonus_categories": ["Bonus Category"],
+  "skill_groups": [
+    {{
+      "category": "Category 1",
+      "importance": "Must-have|Nice-to-have",
+      "skills": [
+        {{"name": "Skill A", "found": true}},
+        {{"name": "Skill B", "found": false}}
+      ]
+    }}
+  ]
+}}
+
+Rules:
+- key_categories must be EXACTLY 6 categories from the JD
+- matched_categories and missing_categories must be subsets of key_categories
+- bonus_categories are relevant to the JD but NOT in key_categories
+- Each category should be 1–4 words, title case
+- skill_groups must include the same 6 categories with 2–5 skills each
+- "found" must reflect whether the CV mentions that skill
+- Return ONLY JSON
+
+JOB DESCRIPTION:
+\"\"\"
+{jd_truncated}
+\"\"\"
+
+RESUME:
+\"\"\"
+{cv_truncated}
+\"\"\"
+"""
+
+    try:
+        raw = _call_gemini(
+            SYSTEM_PROMPT,
+            prompt,
+            temperature=0.2,
+            max_output_tokens=900,
+            response_mime_type="application/json",
+        )
+        parsed = _safe_json_parse(raw) or {}
+        if not isinstance(parsed, dict) or not parsed:
+            meta['status'] = 'empty'
+            meta['error'] = 'No JSON parsed from Gemini response'
+            return {'_meta': meta}
+        meta['status'] = 'ok'
+        parsed['_meta'] = meta
+        return parsed
+    except Exception as exc:
+        logger.warning('Gemini categories failed: %s', exc)
+        meta['status'] = 'error'
+        meta['error'] = str(exc)[:200]
+        return {'_meta': meta}
+
 def _build_recruiter_prompt(cv_text: str, jd_text: str, analysis_summary: dict) -> str:
     cv_truncated = cv_text[:2500]
     jd_truncated = jd_text[:1500]
@@ -523,12 +690,13 @@ Rules:
 """
 
 
-def generate_llm_insights(cv_text: str, jd_text: str, results: dict) -> dict:
+def generate_llm_insights(cv_text: str, jd_text: str, results: dict | None) -> dict:
     if not LLM_ENABLED:
         logger.info('Gemini disabled (no GEMINI_API_KEY)')
         return {}
 
     try:
+        results = results or {}
         analysis_summary = {
             'composite_score': results.get('composite_score', 0),
             'matched_skills': results.get('skill_match', {}).get('matched', []),
@@ -542,7 +710,13 @@ def generate_llm_insights(cv_text: str, jd_text: str, results: dict) -> dict:
 
         prompt = _build_recruiter_prompt(cv_text, jd_text, analysis_summary)
         logger.info('Calling Gemini (prompt: %d chars, model: %s)', len(prompt), GEMINI_MODEL)
-        raw = _call_gemini(SYSTEM_PROMPT, prompt, temperature=0.4, max_output_tokens=1200)
+        raw = _call_gemini(
+            SYSTEM_PROMPT,
+            prompt,
+            temperature=0.3,
+            max_output_tokens=900,
+            response_mime_type="application/json",
+        )
         llm_data = _safe_json_parse(raw) or {}
 
         validated: dict = {}

@@ -323,7 +323,16 @@ Rules:
             meta['status'] = 'empty'
             meta['error'] = 'No JSON parsed from Gemini response'
             return {'_meta': meta}
-        meta['status'] = 'ok'
+
+        has_category = isinstance(parsed.get('category_match'), dict) and bool(parsed.get('category_match'))
+        has_insights = isinstance(parsed.get('insights'), dict) and bool(parsed.get('insights'))
+
+        if has_category and has_insights:
+            meta['status'] = 'ok'
+        else:
+            meta['status'] = 'partial'
+            meta['details'] = f"category={has_category}, insights={has_insights}"
+
         parsed['_meta'] = meta
         return parsed
     except Exception as exc:

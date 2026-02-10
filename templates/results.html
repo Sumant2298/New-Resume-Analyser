@@ -30,7 +30,9 @@
                     <span class="text-[10px] px-2 py-0.5 rounded-full bg-white/15 border border-white/20">
                         LLM: {{ results.llm_meta.status|default('unknown') }} · {{ results.llm_meta.model|default('n/a') }}
                     </span>
-                    {% if results.llm_meta.error %}
+                    {% if results.llm_meta.details %}
+                    <span class="text-[10px] text-white/70 ml-2">({{ results.llm_meta.details }})</span>
+                    {% elif results.llm_meta.error %}
                     <span class="text-[10px] text-white/70 ml-2">({{ results.llm_meta.error }})</span>
                     {% endif %}
                 </div>

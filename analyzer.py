@@ -11,6 +11,8 @@ from sklearn.metrics.pairwise import cosine_similarity
 from llm_service import (
     merge_suggestions,
     generate_llm_bundle,
+    extract_category_match,
+    generate_llm_insights,
 )
 from skills_data import SKILL_CATEGORIES
 
@@ -181,6 +183,13 @@ def analyze_cv_against_jd(cv_text: str, jd_text: str) -> dict:
         results['llm_meta'] = llm_bundle['_meta']
     else:
         results['llm_meta'] = {'enabled': False, 'status': 'disabled'}
+
+    # Fallback: if bundle missing categories, do a smaller category-only call
+    if not (isinstance(category_match, dict) and category_match.get('key_categories')):
+        category_match = extract_category_match(cv_text, jd_text)
+        if category_match:
+            results['llm_meta']['status'] = 'fallback'
+            results['llm_meta']['details'] = 'category-only fallback used'
     if category_match and isinstance(category_match.get('key_categories'), list):
         key_categories = [c.strip() for c in category_match.get('key_categories', []) if isinstance(c, str)][:6]
         matched_categories = [c.strip() for c in category_match.get('matched_categories', []) if isinstance(c, str)]
@@ -242,6 +251,11 @@ def analyze_cv_against_jd(cv_text: str, jd_text: str) -> dict:
 
     # LLM-enhanced insights (from bundle)
     llm_insights = llm_bundle.get('insights', {}) if isinstance(llm_bundle, dict) else {}
+    if not llm_insights:
+        llm_insights = generate_llm_insights(cv_text, jd_text, results)
+        if llm_insights:
+            results['llm_meta']['status'] = 'fallback'
+            results['llm_meta']['details'] = 'insights fallback used'
     results['llm_insights'] = llm_insights
 
     # ATS score: use LLM estimate if available, otherwise compute from NLP

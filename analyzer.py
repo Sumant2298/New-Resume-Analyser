@@ -10,6 +10,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 
 from llm_service import (
     merge_suggestions,
+    generate_full_llm_analysis,
     generate_llm_bundle,
     extract_category_match,
     generate_llm_insights,
@@ -110,11 +111,167 @@ for _resource in ('stopwords', 'punkt_tab'):
     except LookupError:
         nltk.download(_resource, quiet=True)
 
-nlp = spacy.load("en_core_web_sm")
+LLM_ONLY = os.environ.get('LLM_ONLY', 'true').strip().lower() in ('1', 'true', 'yes', 'on')
+
+if not LLM_ONLY:
+    nlp = spacy.load("en_core_web_sm")
+else:
+    nlp = None
+
+
+def _normalize_quick_match(qm: dict) -> dict:
+    def _dim(data: dict | None) -> dict:
+        data = data if isinstance(data, dict) else {}
+        return {
+            'cv_value': data.get('cv_value', 'Not specified'),
+            'jd_value': data.get('jd_value', 'Not specified'),
+            'match_quality': data.get('match_quality', 'Not a Match'),
+        }
+
+    return {
+        'experience': _dim(qm.get('experience')),
+        'education': _dim(qm.get('education')),
+        'skills': _dim(qm.get('skills')),
+        'location': _dim(qm.get('location')),
+    }
+
+
+def _normalize_skill_groups(groups: list[dict]) -> list[dict]:
+    normalized = []
+    for group in groups or []:
+        if not isinstance(group, dict):
+            continue
+        category = str(group.get('category', '')).strip() or 'General'
+        importance = group.get('importance', 'Must-have') or 'Must-have'
+        skills_list = []
+        matched_count = 0
+        for item in group.get('skills', []):
+            name = ''
+            found = False
+            if isinstance(item, dict):
+                name = str(item.get('name') or item.get('skill') or '').strip()
+                found = bool(item.get('found'))
+            else:
+                name = str(item).strip()
+            if not name:
+                continue
+            skills_list.append({'skill': name, 'found': found})
+            if found:
+                matched_count += 1
+        total = len(skills_list)
+        normalized.append({
+            'category': category,
+            'importance': importance,
+            'skills': skills_list,
+            'matched': matched_count,
+            'total': total,
+        })
+    return normalized
+
+
+def _results_from_llm(full: dict) -> dict:
+    scores = full.get('scores', {}) if isinstance(full, dict) else {}
+    category_match = full.get('category_match', {}) if isinstance(full, dict) else {}
+    insights = full.get('insights', {}) if isinstance(full, dict) else {}
+    experience_analysis = full.get('experience_analysis', {}) if isinstance(full, dict) else {}
+    quick_match = _normalize_quick_match(full.get('quick_match', {}) if isinstance(full, dict) else {})
+    keywords = full.get('keywords', {}) if isinstance(full, dict) else {}
+
+    key_categories = [c for c in category_match.get('key_categories', []) if isinstance(c, str)]
+    matched = [c for c in category_match.get('matched_categories', []) if isinstance(c, str)]
+    missing = [c for c in category_match.get('missing_categories', []) if isinstance(c, str)]
+    bonus = [c for c in category_match.get('bonus_categories', []) if isinstance(c, str)]
+
+    # Ensure missing categories are computed if not provided
+    if key_categories and not missing:
+        missing = [c for c in key_categories if c not in set(matched)]
+
+    skill_score = scores.get('skill_match')
+    if not isinstance(skill_score, (int, float)):
+        skill_score = round((len(matched) / len(key_categories)) * 100, 1) if key_categories else 0
+
+    category_breakdown = {}
+    for category in key_categories:
+        is_matched = category in set(matched)
+        category_breakdown[category] = {
+            'score': 100 if is_matched else 0,
+            'matched': [category] if is_matched else [],
+            'missing': [] if is_matched else [category],
+        }
+
+    top_skill_groups = _normalize_skill_groups(category_match.get('skill_groups', []))
+    total_skills = sum(g['total'] for g in top_skill_groups)
+    found_skills = sum(g['matched'] for g in top_skill_groups)
+
+    suggestions = []
+    for idx, item in enumerate(insights.get('enhanced_suggestions', []) if isinstance(insights, dict) else []):
+        if not isinstance(item, dict):
+            continue
+        suggestions.append({
+            'type': 'recruiter_insight',
+            'title': item.get('title', ''),
+            'body': item.get('body', ''),
+            'examples': item.get('examples', []),
+            'priority': 'high' if idx < 2 else 'medium',
+        })
+
+    jd_keywords = [{'phrase': k, 'score': 1} for k in keywords.get('jd', []) if isinstance(k, str)]
+    cv_keywords = [{'phrase': k, 'score': 1} for k in keywords.get('cv', []) if isinstance(k, str)]
+
+    results = {
+        'ats_score': round(scores.get('ats', 0), 1) if isinstance(scores.get('ats'), (int, float)) else 0,
+        'tfidf_score': round(scores.get('text_similarity', 0), 1) if isinstance(scores.get('text_similarity'), (int, float)) else 0,
+        'composite_score': round(scores.get('ats', 0), 1) if isinstance(scores.get('ats'), (int, float)) else 0,
+        'skill_match': {
+            'matched': matched,
+            'missing': missing,
+            'extra': bonus,
+            'skill_score': round(float(skill_score), 1),
+            'matched_by_category': {'Key Categories': matched} if matched else {},
+            'missing_by_category': {'Key Categories': missing} if missing else {},
+            'extra_by_category': {'Bonus Categories': bonus} if bonus else {},
+            'category_breakdown': category_breakdown,
+        },
+        'category_match': {
+            'key_categories': key_categories,
+            'matched_categories': matched,
+            'missing_categories': missing,
+            'bonus_categories': bonus,
+            'match_score': round(float(skill_score), 1),
+            'skill_groups': category_match.get('skill_groups', []),
+        },
+        'experience_analysis': {
+            'verb_alignment': round(scores.get('verb_alignment', 0), 1) if isinstance(scores.get('verb_alignment'), (int, float)) else 0,
+            'common_action_verbs': experience_analysis.get('common_action_verbs', []),
+            'missing_action_verbs': experience_analysis.get('missing_action_verbs', []),
+            'section_relevance': experience_analysis.get('section_relevance', []),
+        },
+        'quick_match': quick_match,
+        'top_skill_groups': top_skill_groups,
+        'jd_keywords': jd_keywords,
+        'cv_keywords': cv_keywords,
+        'jd_keywords_categorized': {},
+        'cv_keywords_categorized': {},
+        'llm_insights': insights if isinstance(insights, dict) else {},
+        'suggestions': suggestions,
+    }
+
+    if total_skills:
+        results['quick_match']['skills']['cv_value'] = f'{found_skills}/{total_skills} key skills'
+        results['quick_match']['skills']['jd_value'] = f'{total_skills} required'
+
+    return results
 
 
 def analyze_cv_against_jd(cv_text: str, jd_text: str) -> dict:
     """Run full analysis pipeline. Returns structured results dict."""
+    if LLM_ONLY:
+        llm_full = generate_full_llm_analysis(cv_text, jd_text)
+        if isinstance(llm_full, dict) and llm_full:
+            results = _results_from_llm(llm_full)
+            results['llm_meta'] = llm_full.get('_meta', {'enabled': True, 'status': 'ok', 'model': os.environ.get('GEMINI_MODEL', '')})
+            return results
+
     cv_clean = preprocess(cv_text)
     jd_clean = preprocess(jd_text)
 
@@ -292,6 +449,8 @@ def preprocess(text: str) -> str:
 
 def extract_keywords(text: str) -> list[dict]:
     """Extract ranked keywords using RAKE + spaCy noun chunks."""
+    if nlp is None:
+        return []
     rake = Rake(min_length=1, max_length=3)
     rake.extract_keywords_from_text(text)
     rake_phrases = rake.get_ranked_phrases_with_scores()

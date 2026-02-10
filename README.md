@@ -22,6 +22,7 @@ Create an API key in Google AI Studio and set:
 GEMINI_API_KEY=YOUR_KEY
 GEMINI_MODEL=gemini-2.5-flash
 GEMINI_TIMEOUT=45
+LLM_ONLY=true
 ```
 
 ### 3) Firebase (Auth)

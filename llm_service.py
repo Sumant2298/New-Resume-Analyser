@@ -19,24 +19,8 @@ GEMINI_MODEL = os.environ.get('GEMINI_MODEL', 'gemini-2.5-flash')
 GEMINI_TIMEOUT = int(os.environ.get('GEMINI_TIMEOUT', '45'))
 LLM_ENABLED = bool(GEMINI_API_KEY)
 
-SYSTEM_PROMPT = """You are a senior technical recruiter with 15+ years of hiring experience at top-tier companies.
-You evaluate candidates the way a real hiring manager would — direct, specific, and focused on what actually moves the needle in a hiring decision.
-
-Your evaluation style:
-- Speak like a recruiter in a debrief meeting: confident, specific, no fluff
-- Flag real red flags and genuine strengths — not vague platitudes
-- Think about ATS compatibility, hiring manager first impressions, and interview readiness
-- Give honest advice that can be acted on TODAY
-- Reference specific things from their CV, not generic templates
-- Address the candidate directly using "you/your"
-
-GUARDRAILS:
-1. NEVER fabricate skills or experience
-2. NEVER suggest lying
-3. Base feedback on actual CV content + JD requirements
-4. Focus on presentation improvements
-5. If skills are missing, suggest learning paths
-6. Return ONLY valid JSON with no markdown
+SYSTEM_PROMPT = """You are a senior technical recruiter. Return ONLY valid JSON.
+Do not include markdown, code fences, or commentary. Do not fabricate skills.
 """
 
 CATEGORY_MATCH_SCHEMA = """{
@@ -120,6 +104,210 @@ COMBINED_SCHEMA = """{
   }
 }"""
 
+FULL_ANALYSIS_SCHEMA = """{
+  "scores": {
+    "ats": 0,
+    "text_similarity": 0,
+    "skill_match": 0,
+    "verb_alignment": 0
+  },
+  "quick_match": {
+    "experience": {"cv_value": "...", "jd_value": "...", "match_quality": "Strong Match|Good Match|Weak Match|Not a Match"},
+    "education": {"cv_value": "...", "jd_value": "...", "match_quality": "Strong Match|Good Match|Weak Match|Not a Match"},
+    "skills": {"cv_value": "...", "jd_value": "...", "match_quality": "Strong Match|Good Match|Weak Match|Not a Match"},
+    "location": {"cv_value": "...", "jd_value": "...", "match_quality": "Strong Match|Good Match|Weak Match|Not a Match"}
+  },
+  "category_match": {
+    "key_categories": ["Category 1", "Category 2", "Category 3", "Category 4", "Category 5", "Category 6"],
+    "matched_categories": ["Category 1"],
+    "missing_categories": ["Category 2"],
+    "bonus_categories": ["Bonus Category"],
+    "skill_groups": [
+      {
+        "category": "Category 1",
+        "importance": "Must-have|Nice-to-have",
+        "skills": [
+          {"name": "Skill A", "found": true},
+          {"name": "Skill B", "found": false}
+        ]
+      }
+    ]
+  },
+  "experience_analysis": {
+    "common_action_verbs": ["built", "led"],
+    "missing_action_verbs": ["designed"],
+    "section_relevance": [{"section": "Projects", "relevance": 72}]
+  },
+  "insights": {
+    "profile_summary": "3-5 sentences",
+    "working_well": ["..."],
+    "needs_improvement": ["..."],
+    "skill_gap_tips": {"Skill": "Tip"},
+    "enhanced_suggestions": [
+      {"title": "...", "body": "...", "examples": ["..."]}
+    ]
+  }
+}"""
+
+FULL_ANALYSIS_SCHEMA_DICT = {
+    "type": "object",
+    "properties": {
+        "scores": {
+            "type": "object",
+            "properties": {
+                "ats": {"type": "number"},
+                "text_similarity": {"type": "number"},
+                "skill_match": {"type": "number"},
+                "verb_alignment": {"type": "number"},
+            },
+            "required": ["ats", "text_similarity", "skill_match", "verb_alignment"],
+        },
+        "quick_match": {
+            "type": "object",
+            "properties": {
+                "experience": {
+                    "type": "object",
+                    "properties": {
+                        "cv_value": {"type": "string"},
+                        "jd_value": {"type": "string"},
+                        "match_quality": {"type": "string"},
+                    },
+                    "required": ["cv_value", "jd_value", "match_quality"],
+                },
+                "education": {
+                    "type": "object",
+                    "properties": {
+                        "cv_value": {"type": "string"},
+                        "jd_value": {"type": "string"},
+                        "match_quality": {"type": "string"},
+                    },
+                    "required": ["cv_value", "jd_value", "match_quality"],
+                },
+                "skills": {
+                    "type": "object",
+                    "properties": {
+                        "cv_value": {"type": "string"},
+                        "jd_value": {"type": "string"},
+                        "match_quality": {"type": "string"},
+                    },
+                    "required": ["cv_value", "jd_value", "match_quality"],
+                },
+                "location": {
+                    "type": "object",
+                    "properties": {
+                        "cv_value": {"type": "string"},
+                        "jd_value": {"type": "string"},
+                        "match_quality": {"type": "string"},
+                    },
+                    "required": ["cv_value", "jd_value", "match_quality"],
+                },
+            },
+            "required": ["experience", "education", "skills", "location"],
+        },
+        "category_match": {
+            "type": "object",
+            "properties": {
+                "key_categories": {"type": "array", "items": {"type": "string"}},
+                "matched_categories": {"type": "array", "items": {"type": "string"}},
+                "missing_categories": {"type": "array", "items": {"type": "string"}},
+                "bonus_categories": {"type": "array", "items": {"type": "string"}},
+                "skill_groups": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "category": {"type": "string"},
+                            "importance": {"type": "string"},
+                            "skills": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "name": {"type": "string"},
+                                        "found": {"type": "boolean"},
+                                    },
+                                    "required": ["name", "found"],
+                                },
+                            },
+                        },
+                        "required": ["category", "importance", "skills"],
+                    },
+                },
+            },
+            "required": [
+                "key_categories",
+                "matched_categories",
+                "missing_categories",
+                "bonus_categories",
+                "skill_groups",
+            ],
+        },
+        "experience_analysis": {
+            "type": "object",
+            "properties": {
+                "common_action_verbs": {"type": "array", "items": {"type": "string"}},
+                "missing_action_verbs": {"type": "array", "items": {"type": "string"}},
+                "section_relevance": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "section": {"type": "string"},
+                            "relevance": {"type": "number"},
+                        },
+                        "required": ["section", "relevance"],
+                    },
+                },
+            },
+            "required": ["common_action_verbs", "missing_action_verbs", "section_relevance"],
+        },
+        "keywords": {
+            "type": "object",
+            "properties": {
+                "jd": {"type": "array", "items": {"type": "string"}},
+                "cv": {"type": "array", "items": {"type": "string"}},
+            },
+            "required": ["jd", "cv"],
+        },
+        "insights": {
+            "type": "object",
+            "properties": {
+                "profile_summary": {"type": "string"},
+                "working_well": {"type": "array", "items": {"type": "string"}},
+                "needs_improvement": {"type": "array", "items": {"type": "string"}},
+                "skill_gap_tips": {"type": "object"},
+                "enhanced_suggestions": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "title": {"type": "string"},
+                            "body": {"type": "string"},
+                            "examples": {"type": "array", "items": {"type": "string"}},
+                        },
+                        "required": ["title", "body", "examples"],
+                    },
+                },
+            },
+            "required": [
+                "profile_summary",
+                "working_well",
+                "needs_improvement",
+                "skill_gap_tips",
+                "enhanced_suggestions",
+            ],
+        },
+    },
+    "required": [
+        "scores",
+        "quick_match",
+        "category_match",
+        "experience_analysis",
+        "keywords",
+        "insights",
+    ],
+}
+
 
 def _safe_json_parse(text: str):
     try:
@@ -137,7 +325,8 @@ def _safe_json_parse(text: str):
 
 def _call_gemini(system_prompt: str, user_prompt: str,
                  temperature: float = 0.2, max_output_tokens: int = 1500,
-                 response_mime_type: str | None = None) -> str:
+                 response_mime_type: str | None = None,
+                 response_schema: dict | None = None) -> str:
     if not LLM_ENABLED:
         return ''
 
@@ -158,6 +347,8 @@ def _call_gemini(system_prompt: str, user_prompt: str,
     }
     if response_mime_type:
         generation_config["responseMimeType"] = response_mime_type
+    if response_schema:
+        generation_config["_responseJsonSchema"] = response_schema
 
     payload = {
         "contents": [
@@ -274,6 +465,87 @@ Rules:
     except Exception as exc:
         logger.warning('Gemini JD skill extraction failed: %s', exc)
         return []
+
+
+# ---------------------------------------------------------------------------
+# Full LLM analysis (LLM-only mode)
+# ---------------------------------------------------------------------------
+
+def generate_full_llm_analysis(cv_text: str, jd_text: str) -> dict:
+    if not LLM_ENABLED:
+        logger.info('Gemini disabled (no GEMINI_API_KEY)')
+        return {}
+
+    meta = {
+        'enabled': True,
+        'model': GEMINI_MODEL,
+        'status': 'pending',
+    }
+
+    cv_truncated = cv_text[:3200]
+    jd_truncated = jd_text[:2200]
+
+    prompt = f"""You are a recruiter. Analyze the CV against the JD and fill ALL fields in the JSON schema.
+Rules:
+- Use ONLY the provided CV + JD
+- If information is missing, use \"Not specified\"
+- key_categories must be EXACTLY 6 categories from the JD
+- matched_categories and missing_categories must be subsets of key_categories
+- bonus_categories are relevant to the JD but NOT in key_categories
+- skill_groups must contain the same 6 categories; include 2–5 skills each with found=true/false
+- scores are 0–100 numbers
+- keywords.jd and keywords.cv should each have 8–12 items
+- Return ONLY JSON (no markdown, no commentary)
+
+JOB DESCRIPTION:
+\"\"\"
+{jd_truncated}
+\"\"\"
+
+RESUME:
+\"\"\"
+{cv_truncated}
+\"\"\"
+
+Schema:
+{FULL_ANALYSIS_SCHEMA}
+"""
+
+    try:
+        raw = _call_gemini(
+            SYSTEM_PROMPT,
+            prompt,
+            temperature=0.1,
+            max_output_tokens=1400,
+            response_mime_type="application/json",
+            response_schema=FULL_ANALYSIS_SCHEMA_DICT,
+        )
+        parsed = _safe_json_parse(raw) or {}
+        if not isinstance(parsed, dict) or not parsed:
+            retry_prompt = prompt + "\n\nSTRICT: Return ONLY raw JSON starting with { and ending with }."
+            raw_retry = _call_gemini(
+                SYSTEM_PROMPT,
+                retry_prompt,
+                temperature=0.0,
+                max_output_tokens=1400,
+                response_mime_type="application/json",
+                response_schema=FULL_ANALYSIS_SCHEMA_DICT,
+            )
+            parsed = _safe_json_parse(raw_retry) or {}
+
+        if not isinstance(parsed, dict) or not parsed:
+            meta['status'] = 'empty'
+            meta['error'] = 'No JSON parsed from Gemini response'
+            return {'_meta': meta}
+
+        meta['status'] = 'ok'
+        parsed['_meta'] = meta
+        return parsed
+    except Exception as exc:
+        logger.warning('Gemini full analysis failed: %s', exc)
+        meta['status'] = 'error'
+        meta['error'] = str(exc)[:200]
+        return {'_meta': meta}
 
 
 # ---------------------------------------------------------------------------

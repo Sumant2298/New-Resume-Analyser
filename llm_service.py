@@ -21,8 +21,9 @@ GEMINI_MODEL = os.environ.get('GEMINI_MODEL', 'gemini-2.5-flash')
 GEMINI_TIMEOUT = int(os.environ.get('GEMINI_TIMEOUT', '45'))
 LLM_ENABLED = bool(GEMINI_API_KEY)
 
-SYSTEM_PROMPT = """You are a senior technical recruiter. Return ONLY valid JSON.
-Do not include markdown, code fences, or commentary. Do not fabricate skills.
+SYSTEM_PROMPT = """You are a strict JSON generator.
+Return ONLY valid JSON. No markdown, no code fences, no commentary.
+If a value is missing, use "Not specified".
 """
 
 CATEGORY_MATCH_SCHEMA = """{
@@ -207,13 +208,23 @@ def _call_gemini(system_prompt: str, user_prompt: str,
         generation_config["responseMimeType"] = response_mime_type
 
     payload = {
+        "systemInstruction": {
+            "role": "system",
+            "parts": [{"text": system_prompt}],
+        },
         "contents": [
             {
                 "role": "user",
-                "parts": [{"text": full_prompt}]
+                "parts": [{"text": user_prompt}]
             }
         ],
-        "generationConfig": generation_config
+        "generationConfig": generation_config,
+        "safetySettings": [
+            {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
+            {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+            {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+            {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
+        ],
     }
 
     response = requests.post(url, headers=headers, json=payload, timeout=GEMINI_TIMEOUT)
@@ -221,7 +232,13 @@ def _call_gemini(system_prompt: str, user_prompt: str,
         raise RuntimeError(f"Gemini error: {response.status_code} {response.text}")
 
     data = response.json()
-    parts = data.get('candidates', [{}])[0].get('content', {}).get('parts', [])
+    cand = data.get('candidates', [{}])[0]
+    parts = cand.get('content', {}).get('parts', [])
+    finish = cand.get('finishReason')
+    if finish:
+        logger.info('Gemini finishReason=%s', finish)
+    if not parts:
+        logger.warning('Gemini returned no parts. Candidate=%s', str(cand)[:200])
     text = ''.join(part.get('text', '') for part in parts)
     logger.info('Gemini response ok (chars=%s)', len(text))
     return text
@@ -513,8 +530,8 @@ def generate_llm_scores_quickmatch(cv_text: str, jd_text: str) -> dict:
         return {}
 
     meta = {'enabled': True, 'model': GEMINI_MODEL, 'status': 'pending'}
-    cv_truncated = cv_text[:2800]
-    jd_truncated = jd_text[:2000]
+    cv_truncated = cv_text[:1800]
+    jd_truncated = jd_text[:1500]
 
     prompt = f"""Return ONLY JSON with this schema:
 {{
@@ -582,8 +599,8 @@ def generate_llm_categories(cv_text: str, jd_text: str) -> dict:
         return {}
 
     meta = {'enabled': True, 'model': GEMINI_MODEL, 'status': 'pending'}
-    cv_truncated = cv_text[:3200]
-    jd_truncated = jd_text[:2200]
+    cv_truncated = cv_text[:2000]
+    jd_truncated = jd_text[:1700]
 
     prompt = f"""Return ONLY JSON with this schema:
 {{
@@ -708,12 +725,40 @@ def generate_llm_insights(cv_text: str, jd_text: str, results: dict | None) -> d
             'missing_verbs': results.get('experience_analysis', {}).get('missing_action_verbs', []),
         }
 
-        prompt = _build_recruiter_prompt(cv_text, jd_text, analysis_summary)
-        logger.info('Calling Gemini (prompt: %d chars, model: %s)', len(prompt), GEMINI_MODEL)
+        # Shorter, JSON-only prompt for reliability
+        cv_truncated = cv_text[:1800]
+        jd_truncated = jd_text[:1400]
+        prompt = f"""Return ONLY JSON with this schema:
+{{
+  "profile_summary": "3-5 sentences",
+  "working_well": ["..."],
+  "needs_improvement": ["..."],
+  "skill_gap_tips": {{"Skill": "Tip"}},
+  "enhanced_suggestions": [
+    {{"title": "...", "body": "...", "examples": ["Example 1", "Example 2"]}}
+  ]
+}}
+
+Rules:
+- working_well and needs_improvement: 3-5 items each
+- enhanced_suggestions: 3-5 items
+- Return ONLY JSON
+
+JOB DESCRIPTION:
+\"\"\"
+{jd_truncated}
+\"\"\"
+
+RESUME:
+\"\"\"
+{cv_truncated}
+\"\"\"
+"""
+        logger.info('Calling Gemini insights (prompt: %d chars, model: %s)', len(prompt), GEMINI_MODEL)
         raw = _call_gemini(
             SYSTEM_PROMPT,
             prompt,
-            temperature=0.3,
+            temperature=0.2,
             max_output_tokens=900,
             response_mime_type="application/json",
         )

@@ -490,7 +490,14 @@ def _call_gemini(system_prompt: str, user_prompt: str,
     if min_output_chars is None:
         min_output_chars = GEMINI_MIN_JSON_CHARS
 
-    for model in _candidate_models():
+    candidates = _candidate_models()
+    if candidates:
+        logger.info('Gemini candidates: %s', ', '.join(candidates))
+    best_text = ''
+    best_model = None
+
+    for model in candidates:
+        logger.info('Gemini attempt model=%s', model)
         url = (
             "https://generativelanguage.googleapis.com/v1beta/models/"
             f"{model}:generateContent?key={GEMINI_API_KEY}"
@@ -507,6 +514,9 @@ def _call_gemini(system_prompt: str, user_prompt: str,
                 if not parts:
                     logger.warning('Gemini returned no parts. Candidate=%s', str(cand)[:200])
                 text = ''.join(part.get('text', '') for part in parts)
+                if len(text) > len(best_text):
+                    best_text = text
+                    best_model = model
                 global _LAST_WORKING_MODEL
                 # If output is too short (likely truncated), try next model
                 if finish == "MAX_TOKENS" and len(text) < min_output_chars:
@@ -529,6 +539,12 @@ def _call_gemini(system_prompt: str, user_prompt: str,
         except Exception as exc:
             last_error = str(exc)
             continue
+
+    if best_text:
+        logger.warning('Gemini returning short output from model=%s (%s chars)', best_model, len(best_text))
+        if best_model:
+            _LAST_WORKING_MODEL = best_model
+        return best_text
 
     raise RuntimeError(f"Gemini error: {last_error or 'no supported model found'}")
 
@@ -899,6 +915,71 @@ RESUME:
             parsed = parsed_min
 
         missing_all = all(v.get("cv_value") == "Not specified" for v in parsed["quick_match"].values())
+
+        # Final fallback: ask for scores only, then quick_match only
+        if parsed["scores"]["ats"] == 0 and missing_all:
+            scores_only = _call_gemini(
+                SYSTEM_PROMPT,
+                f"""Return ONLY JSON:
+{{"ats":0,"text_similarity":0,"skill_match":0,"verb_alignment":0}}
+
+Rules:
+- integers 0-100
+- use best estimate from CV + JD
+
+JOB DESCRIPTION:
+\"\"\"
+{jd_truncated}
+\"\"\"
+
+RESUME:
+\"\"\"
+{cv_truncated}
+\"\"\"
+""",
+                temperature=0.1,
+                max_output_tokens=200,
+                response_mime_type=None,
+                min_output_chars=10,
+            )
+            scores_only_parsed = _safe_json_parse(scores_only) or {}
+            if isinstance(scores_only_parsed, dict):
+                parsed["scores"]["ats"] = int(scores_only_parsed.get("ats", 0) or 0)
+                parsed["scores"]["text_similarity"] = int(scores_only_parsed.get("text_similarity", 0) or 0)
+                parsed["scores"]["skill_match"] = int(scores_only_parsed.get("skill_match", 0) or 0)
+                parsed["scores"]["verb_alignment"] = int(scores_only_parsed.get("verb_alignment", 0) or 0)
+
+            quick_match_only = _call_gemini(
+                SYSTEM_PROMPT,
+                f"""Return ONLY JSON:
+{{"experience":{{"cv_value":"","jd_value":"","match_quality":""}},
+ "education":{{"cv_value":"","jd_value":"","match_quality":""}},
+ "skills":{{"cv_value":"","jd_value":"","match_quality":""}},
+ "location":{{"cv_value":"","jd_value":"","match_quality":""}}}}
+
+Rules:
+- match_quality must be one of: Strong Match, Good Match, Weak Match, Not a Match
+- if missing, use "Not specified"
+
+JOB DESCRIPTION:
+\"\"\"
+{jd_truncated}
+\"\"\"
+
+RESUME:
+\"\"\"
+{cv_truncated}
+\"\"\"
+""",
+                temperature=0.1,
+                max_output_tokens=300,
+                response_mime_type=None,
+                min_output_chars=10,
+            )
+            qm_parsed = _safe_json_parse(quick_match_only) or {}
+            if isinstance(qm_parsed, dict):
+                parsed["quick_match"] = _coerce_scores_quickmatch({"quick_match": qm_parsed}).get("quick_match", parsed["quick_match"])
+                missing_all = all(v.get("cv_value") == "Not specified" for v in parsed["quick_match"].values())
 
         # If we got here, we have a structured payload
         meta['status'] = 'ok' if parsed["scores"]["ats"] or not missing_all else 'partial'

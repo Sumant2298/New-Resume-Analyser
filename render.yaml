@@ -4,7 +4,7 @@ services:
     env: python
     plan: free
     buildCommand: ./build.sh
-    startCommand: gunicorn app:app
+    startCommand: gunicorn --timeout 120 --graceful-timeout 120 --workers 1 --threads 2 app:app
     envVars:
       - key: SECRET_KEY
         generateValue: true
@@ -18,6 +18,8 @@ services:
         sync: false
       - key: GEMINI_MODEL
         value: gemini-2.5-flash
+      - key: GEMINI_TIMEOUT
+        value: "45"
       - key: FIRESTORE_ENABLED
         value: "false"
       - key: FIREBASE_SERVICE_ACCOUNT_KEY

@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 
 GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', '')
 GEMINI_MODEL = os.environ.get('GEMINI_MODEL', 'gemini-2.5-flash')
+GEMINI_TIMEOUT = int(os.environ.get('GEMINI_TIMEOUT', '45'))
 LLM_ENABLED = bool(GEMINI_API_KEY)
 
 SYSTEM_PROMPT = """You are a senior technical recruiter with 15+ years of hiring experience at top-tier companies.
@@ -125,7 +126,7 @@ def _call_gemini(system_prompt: str, user_prompt: str,
         }
     }
 
-    response = requests.post(url, headers=headers, json=payload, timeout=20)
+    response = requests.post(url, headers=headers, json=payload, timeout=GEMINI_TIMEOUT)
     if not response.ok:
         raise RuntimeError(f"Gemini error: {response.status_code} {response.text}")
 
@@ -148,14 +149,17 @@ def extract_category_match(cv_text: str, jd_text: str) -> dict:
         logger.info('Gemini disabled (no GEMINI_API_KEY)')
         return {}
 
+    cv_truncated = cv_text[:4000]
+    jd_truncated = jd_text[:2500]
+
     user_prompt = f"""JOB DESCRIPTION:
 \"\"\"
-{jd_text}
+{jd_truncated}
 \"\"\"
 
 RESUME:
 \"\"\"
-{cv_text}
+{cv_truncated}
 \"\"\"
 
 Return ONLY valid JSON with this schema:
@@ -171,7 +175,7 @@ Rules:
 """
 
     try:
-        raw = _call_gemini(SYSTEM_PROMPT, user_prompt, temperature=0.2, max_output_tokens=1200)
+        raw = _call_gemini(SYSTEM_PROMPT, user_prompt, temperature=0.2, max_output_tokens=800)
         parsed = _safe_json_parse(raw) or {}
         return parsed
     except Exception as exc:
@@ -208,7 +212,7 @@ Rules:
 """
 
     try:
-        raw = _call_gemini(SYSTEM_PROMPT, prompt, temperature=0.2, max_output_tokens=900)
+        raw = _call_gemini(SYSTEM_PROMPT, prompt, temperature=0.2, max_output_tokens=700)
         data = _safe_json_parse(raw) or {}
         groups = data.get('skill_groups', [])
         validated = []
@@ -295,7 +299,7 @@ def generate_llm_insights(cv_text: str, jd_text: str, results: dict) -> dict:
 
         prompt = _build_recruiter_prompt(cv_text, jd_text, analysis_summary)
         logger.info('Calling Gemini (prompt: %d chars, model: %s)', len(prompt), GEMINI_MODEL)
-        raw = _call_gemini(SYSTEM_PROMPT, prompt, temperature=0.4, max_output_tokens=2000)
+        raw = _call_gemini(SYSTEM_PROMPT, prompt, temperature=0.4, max_output_tokens=1200)
         llm_data = _safe_json_parse(raw) or {}
 
         validated: dict = {}

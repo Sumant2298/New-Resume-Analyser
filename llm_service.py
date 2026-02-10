@@ -149,164 +149,6 @@ FULL_ANALYSIS_SCHEMA = """{
   }
 }"""
 
-FULL_ANALYSIS_SCHEMA_DICT = {
-    "type": "object",
-    "properties": {
-        "scores": {
-            "type": "object",
-            "properties": {
-                "ats": {"type": "number"},
-                "text_similarity": {"type": "number"},
-                "skill_match": {"type": "number"},
-                "verb_alignment": {"type": "number"},
-            },
-            "required": ["ats", "text_similarity", "skill_match", "verb_alignment"],
-        },
-        "quick_match": {
-            "type": "object",
-            "properties": {
-                "experience": {
-                    "type": "object",
-                    "properties": {
-                        "cv_value": {"type": "string"},
-                        "jd_value": {"type": "string"},
-                        "match_quality": {"type": "string"},
-                    },
-                    "required": ["cv_value", "jd_value", "match_quality"],
-                },
-                "education": {
-                    "type": "object",
-                    "properties": {
-                        "cv_value": {"type": "string"},
-                        "jd_value": {"type": "string"},
-                        "match_quality": {"type": "string"},
-                    },
-                    "required": ["cv_value", "jd_value", "match_quality"],
-                },
-                "skills": {
-                    "type": "object",
-                    "properties": {
-                        "cv_value": {"type": "string"},
-                        "jd_value": {"type": "string"},
-                        "match_quality": {"type": "string"},
-                    },
-                    "required": ["cv_value", "jd_value", "match_quality"],
-                },
-                "location": {
-                    "type": "object",
-                    "properties": {
-                        "cv_value": {"type": "string"},
-                        "jd_value": {"type": "string"},
-                        "match_quality": {"type": "string"},
-                    },
-                    "required": ["cv_value", "jd_value", "match_quality"],
-                },
-            },
-            "required": ["experience", "education", "skills", "location"],
-        },
-        "category_match": {
-            "type": "object",
-            "properties": {
-                "key_categories": {"type": "array", "items": {"type": "string"}},
-                "matched_categories": {"type": "array", "items": {"type": "string"}},
-                "missing_categories": {"type": "array", "items": {"type": "string"}},
-                "bonus_categories": {"type": "array", "items": {"type": "string"}},
-                "skill_groups": {
-                    "type": "array",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "category": {"type": "string"},
-                            "importance": {"type": "string"},
-                            "skills": {
-                                "type": "array",
-                                "items": {
-                                    "type": "object",
-                                    "properties": {
-                                        "name": {"type": "string"},
-                                        "found": {"type": "boolean"},
-                                    },
-                                    "required": ["name", "found"],
-                                },
-                            },
-                        },
-                        "required": ["category", "importance", "skills"],
-                    },
-                },
-            },
-            "required": [
-                "key_categories",
-                "matched_categories",
-                "missing_categories",
-                "bonus_categories",
-                "skill_groups",
-            ],
-        },
-        "experience_analysis": {
-            "type": "object",
-            "properties": {
-                "common_action_verbs": {"type": "array", "items": {"type": "string"}},
-                "missing_action_verbs": {"type": "array", "items": {"type": "string"}},
-                "section_relevance": {
-                    "type": "array",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "section": {"type": "string"},
-                            "relevance": {"type": "number"},
-                        },
-                        "required": ["section", "relevance"],
-                    },
-                },
-            },
-            "required": ["common_action_verbs", "missing_action_verbs", "section_relevance"],
-        },
-        "keywords": {
-            "type": "object",
-            "properties": {
-                "jd": {"type": "array", "items": {"type": "string"}},
-                "cv": {"type": "array", "items": {"type": "string"}},
-            },
-            "required": ["jd", "cv"],
-        },
-        "insights": {
-            "type": "object",
-            "properties": {
-                "profile_summary": {"type": "string"},
-                "working_well": {"type": "array", "items": {"type": "string"}},
-                "needs_improvement": {"type": "array", "items": {"type": "string"}},
-                "skill_gap_tips": {"type": "object"},
-                "enhanced_suggestions": {
-                    "type": "array",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "title": {"type": "string"},
-                            "body": {"type": "string"},
-                            "examples": {"type": "array", "items": {"type": "string"}},
-                        },
-                        "required": ["title", "body", "examples"],
-                    },
-                },
-            },
-            "required": [
-                "profile_summary",
-                "working_well",
-                "needs_improvement",
-                "skill_gap_tips",
-                "enhanced_suggestions",
-            ],
-        },
-    },
-    "required": [
-        "scores",
-        "quick_match",
-        "category_match",
-        "experience_analysis",
-        "keywords",
-        "insights",
-    ],
-}
 
 
 def _safe_json_parse(text: str):
@@ -325,8 +167,7 @@ def _safe_json_parse(text: str):
 
 def _call_gemini(system_prompt: str, user_prompt: str,
                  temperature: float = 0.2, max_output_tokens: int = 1500,
-                 response_mime_type: str | None = None,
-                 response_schema: dict | None = None) -> str:
+                 response_mime_type: str | None = None) -> str:
     if not LLM_ENABLED:
         return ''
 
@@ -347,8 +188,6 @@ def _call_gemini(system_prompt: str, user_prompt: str,
     }
     if response_mime_type:
         generation_config["responseMimeType"] = response_mime_type
-    if response_schema:
-        generation_config["_responseJsonSchema"] = response_schema
 
     payload = {
         "contents": [
@@ -518,7 +357,6 @@ Schema:
             temperature=0.1,
             max_output_tokens=1400,
             response_mime_type="application/json",
-            response_schema=FULL_ANALYSIS_SCHEMA_DICT,
         )
         parsed = _safe_json_parse(raw) or {}
         if not isinstance(parsed, dict) or not parsed:
@@ -529,7 +367,6 @@ Schema:
                 temperature=0.0,
                 max_output_tokens=1400,
                 response_mime_type="application/json",
-                response_schema=FULL_ANALYSIS_SCHEMA_DICT,
             )
             parsed = _safe_json_parse(raw_retry) or {}
 

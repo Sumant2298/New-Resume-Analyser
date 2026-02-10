@@ -136,7 +136,8 @@ def _safe_json_parse(text: str):
 
 
 def _call_gemini(system_prompt: str, user_prompt: str,
-                 temperature: float = 0.2, max_output_tokens: int = 1500) -> str:
+                 temperature: float = 0.2, max_output_tokens: int = 1500,
+                 response_mime_type: str | None = None) -> str:
     if not LLM_ENABLED:
         return ''
 
@@ -151,6 +152,13 @@ def _call_gemini(system_prompt: str, user_prompt: str,
     logger.info('Gemini request start (model=%s, timeout=%ss, prompt_chars=%s)',
                 GEMINI_MODEL, GEMINI_TIMEOUT, len(full_prompt))
 
+    generation_config = {
+        "temperature": temperature,
+        "maxOutputTokens": max_output_tokens,
+    }
+    if response_mime_type:
+        generation_config["responseMimeType"] = response_mime_type
+
     payload = {
         "contents": [
             {
@@ -158,10 +166,7 @@ def _call_gemini(system_prompt: str, user_prompt: str,
                 "parts": [{"text": full_prompt}]
             }
         ],
-        "generationConfig": {
-            "temperature": temperature,
-            "maxOutputTokens": max_output_tokens
-        }
+        "generationConfig": generation_config
     }
 
     response = requests.post(url, headers=headers, json=payload, timeout=GEMINI_TIMEOUT)
@@ -317,8 +322,26 @@ Rules:
 """
 
     try:
-        raw = _call_gemini(SYSTEM_PROMPT, prompt, temperature=0.3, max_output_tokens=1200)
+        raw = _call_gemini(
+            SYSTEM_PROMPT,
+            prompt,
+            temperature=0.2,
+            max_output_tokens=1200,
+            response_mime_type="application/json",
+        )
         parsed = _safe_json_parse(raw) or {}
+        if not isinstance(parsed, dict) or not parsed:
+            # Retry once with stricter instruction and lower temperature
+            retry_prompt = prompt + "\n\nSTRICT RULE: Return ONLY raw JSON. Start with { and end with }."
+            raw_retry = _call_gemini(
+                SYSTEM_PROMPT,
+                retry_prompt,
+                temperature=0.0,
+                max_output_tokens=1200,
+                response_mime_type="application/json",
+            )
+            parsed = _safe_json_parse(raw_retry) or {}
+
         if not isinstance(parsed, dict) or not parsed:
             meta['status'] = 'empty'
             meta['error'] = 'No JSON parsed from Gemini response'

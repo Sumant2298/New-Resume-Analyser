@@ -194,6 +194,34 @@ def _safe_json_parse(text: str):
                 return None
 
 
+def _repair_json(raw_text: str, schema_hint: str, max_output_tokens: int = 700) -> dict | None:
+    if not raw_text:
+        return None
+    snippet = raw_text[:2000]
+    prompt = f"""Convert the text below into valid JSON that matches this schema.
+Return ONLY JSON. Do not add commentary.
+
+Schema:
+{schema_hint}
+
+Text:
+\"\"\"
+{snippet}
+\"\"\"
+"""
+    try:
+        fixed = _call_gemini(
+            SYSTEM_PROMPT,
+            prompt,
+            temperature=0.0,
+            max_output_tokens=max_output_tokens,
+            response_mime_type="application/json",
+        )
+        return _safe_json_parse(fixed)
+    except Exception:
+        return None
+
+
 def _list_models() -> list[str]:
     if not GEMINI_API_KEY:
         return []
@@ -647,14 +675,18 @@ RESUME:
             SYSTEM_PROMPT,
             prompt,
             temperature=0.1,
-            max_output_tokens=700,
+            max_output_tokens=900,
             response_mime_type="application/json",
         )
         parsed = _safe_json_parse(raw) or {}
         if not isinstance(parsed, dict) or not parsed:
+            parsed = _repair_json(raw, prompt, max_output_tokens=700) or {}
+
+        if not isinstance(parsed, dict) or not parsed:
             meta['status'] = 'empty'
             meta['error'] = 'No JSON parsed from Gemini response'
             return {'_meta': meta}
+
         meta['status'] = 'ok'
         parsed['_meta'] = meta
         return parsed
@@ -717,14 +749,18 @@ RESUME:
             SYSTEM_PROMPT,
             prompt,
             temperature=0.2,
-            max_output_tokens=900,
+            max_output_tokens=1200,
             response_mime_type="application/json",
         )
         parsed = _safe_json_parse(raw) or {}
         if not isinstance(parsed, dict) or not parsed:
+            parsed = _repair_json(raw, prompt, max_output_tokens=800) or {}
+
+        if not isinstance(parsed, dict) or not parsed:
             meta['status'] = 'empty'
             meta['error'] = 'No JSON parsed from Gemini response'
             return {'_meta': meta}
+
         meta['status'] = 'ok'
         parsed['_meta'] = meta
         return parsed
@@ -831,10 +867,12 @@ RESUME:
             SYSTEM_PROMPT,
             prompt,
             temperature=0.2,
-            max_output_tokens=900,
+            max_output_tokens=1000,
             response_mime_type="application/json",
         )
         llm_data = _safe_json_parse(raw) or {}
+        if not isinstance(llm_data, dict) or not llm_data:
+            llm_data = _repair_json(raw, prompt, max_output_tokens=800) or {}
 
         validated: dict = {}
         if isinstance(llm_data.get('profile_summary'), str):

@@ -100,22 +100,30 @@ def extract_category_match(cv_text: str, jd_text: str) -> dict:
     if not LLM_ENABLED:
         return {}
 
-    user_prompt = f"""JOB DESCRIPTION:\n"""\n{jd_text}\n"""\n\nRESUME:\n"""\n{cv_text}\n"""
+    user_prompt = f"""JOB DESCRIPTION:
+\"\"\"
+{jd_text}
+\"\"\"
+
+RESUME:
+\"\"\"
+{cv_text}
+\"\"\"
 
 Return ONLY valid JSON with this schema:
-{
-  "key_categories": ["Category 1", "Category 2", "..."],
-  "matched_categories": ["Category 1"],
-  "missing_categories": ["Category 2"],
-  "bonus_categories": ["Bonus Category A", "Bonus Category B"],
-  "skill_groups": [
-    {
-      "category": "Category 1",
-      "skills": ["Skill A", "Skill B"],
-      "importance": "Must-have" or "Nice-to-have"
-    }
+{{
+  \"key_categories\": [\"Category 1\", \"Category 2\", \"...\"],
+  \"matched_categories\": [\"Category 1\"],
+  \"missing_categories\": [\"Category 2\"],
+  \"bonus_categories\": [\"Bonus Category A\", \"Bonus Category B\"],
+  \"skill_groups\": [
+    {{
+      \"category\": \"Category 1\",
+      \"skills\": [\"Skill A\", \"Skill B\"],
+      \"importance\": \"Must-have\" or \"Nice-to-have\"
+    }}
   ]
-}
+}}
 
 Rules:
 - key_categories must be EXACTLY 6 categories from the JD
@@ -147,18 +155,21 @@ def extract_jd_top_skills(jd_text: str) -> list[dict]:
     prompt = f"""Analyze this job description and identify the TOP 6 skill CATEGORIES a recruiter would screen for.
 Group related skills together.
 
-JOB DESCRIPTION:\n"""\n{jd_truncated}\n"""
+JOB DESCRIPTION:
+\"\"\"
+{jd_truncated}
+\"\"\"
 
 Return JSON with this exact structure:
-{
-  "skill_groups": [
-    {
-      "category": "Category name",
-      "skills": ["Skill 1", "Skill 2"],
-      "importance": "Must-have" or "Nice-to-have"
-    }
+{{
+  \"skill_groups\": [
+    {{
+      \"category\": \"Category name\",
+      \"skills\": [\"Skill 1\", \"Skill 2\"],
+      \"importance\": \"Must-have\" or \"Nice-to-have\"
+    }}
   ]
-}
+}}
 
 Rules:
 - Return exactly 6 skill groups

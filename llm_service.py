@@ -175,6 +175,16 @@ SCORES_SCHEMA = """{
   "keywords": {"jd": [], "cv": []}
 }"""
 
+SCORES_MIN_SCHEMA = """{
+  "scores": {"ats": 0, "text_similarity": 0, "skill_match": 0, "verb_alignment": 0},
+  "quick_match": {
+    "experience": {"cv_value": "", "jd_value": "", "match_quality": ""},
+    "education": {"cv_value": "", "jd_value": "", "match_quality": ""},
+    "skills": {"cv_value": "", "jd_value": "", "match_quality": ""},
+    "location": {"cv_value": "", "jd_value": "", "match_quality": ""}
+  }
+}"""
+
 CATEGORIES_SCHEMA = """{
   "key_categories": ["Category 1", "Category 2", "Category 3", "Category 4", "Category 5", "Category 6"],
   "matched_categories": ["Category 1"],
@@ -262,6 +272,56 @@ def _validate_scores_quickmatch(data: dict) -> bool:
     if not isinstance(keywords.get("jd"), list) or not isinstance(keywords.get("cv"), list):
         return False
     return True
+
+
+def _coerce_scores_quickmatch(data: dict) -> dict:
+    if not isinstance(data, dict):
+        data = {}
+
+    scores = data.get("scores") if isinstance(data.get("scores"), dict) else {}
+    def _num(val):
+        if isinstance(val, (int, float)):
+            return max(0, min(100, int(val)))
+        if isinstance(val, str) and val.strip().isdigit():
+            return max(0, min(100, int(val.strip())))
+        return 0
+
+    scores = {
+        "ats": _num(scores.get("ats")),
+        "text_similarity": _num(scores.get("text_similarity")),
+        "skill_match": _num(scores.get("skill_match")),
+        "verb_alignment": _num(scores.get("verb_alignment")),
+    }
+
+    qm = data.get("quick_match") if isinstance(data.get("quick_match"), dict) else {}
+    def _qm_item(raw):
+        if not isinstance(raw, dict):
+            raw = {}
+        cv_val = str(raw.get("cv_value", "Not specified")) if raw.get("cv_value") is not None else "Not specified"
+        jd_val = str(raw.get("jd_value", "Not specified")) if raw.get("jd_value") is not None else "Not specified"
+        match_quality = str(raw.get("match_quality", "Not a Match"))
+        if match_quality not in ("Strong Match", "Good Match", "Weak Match", "Not a Match"):
+            match_quality = "Not a Match"
+        return {"cv_value": cv_val, "jd_value": jd_val, "match_quality": match_quality}
+
+    quick_match = {
+        "experience": _qm_item(qm.get("experience")),
+        "education": _qm_item(qm.get("education")),
+        "skills": _qm_item(qm.get("skills")),
+        "location": _qm_item(qm.get("location")),
+    }
+
+    keywords = data.get("keywords") if isinstance(data.get("keywords"), dict) else {}
+    jd_kw = keywords.get("jd") if isinstance(keywords.get("jd"), list) else []
+    cv_kw = keywords.get("cv") if isinstance(keywords.get("cv"), list) else []
+    jd_kw = [str(x) for x in jd_kw if isinstance(x, (str, int, float))][:12]
+    cv_kw = [str(x) for x in cv_kw if isinstance(x, (str, int, float))][:12]
+
+    return {
+        "scores": scores,
+        "quick_match": quick_match,
+        "keywords": {"jd": jd_kw, "cv": cv_kw},
+    }
 
 
 def _validate_categories(data: dict) -> bool:
@@ -761,8 +821,8 @@ def generate_llm_scores_quickmatch(cv_text: str, jd_text: str) -> dict:
         return {}
 
     meta = {'enabled': True, 'model': GEMINI_MODEL, 'status': 'pending'}
-    cv_truncated = cv_text[:1800]
-    jd_truncated = jd_text[:1500]
+    cv_truncated = cv_text[:1600]
+    jd_truncated = jd_text[:1300]
 
     prompt = f"""Return ONLY JSON. Use ALL keys exactly as shown.
 JSON:
@@ -791,20 +851,57 @@ RESUME:
             SYSTEM_PROMPT,
             prompt,
             temperature=0.1,
-            max_output_tokens=700,
+            max_output_tokens=600,
             response_mime_type="application/json",
-            min_output_chars=80,
+            min_output_chars=60,
         )
         parsed = _safe_json_parse(raw) or {}
         if not _validate_scores_quickmatch(parsed):
-            parsed = _repair_json(raw, SCORES_SCHEMA, max_output_tokens=500) or {}
+            parsed = _repair_json(raw, SCORES_SCHEMA, max_output_tokens=450) or {}
 
-        if not _validate_scores_quickmatch(parsed):
-            meta['status'] = 'empty'
-            meta['error'] = 'No JSON parsed from Gemini response'
-            return {'_meta': meta}
+        parsed = _coerce_scores_quickmatch(parsed)
 
-        meta['status'] = 'ok'
+        # If still empty/missing, retry with minimal schema (no keywords)
+        missing_all = all(v.get("cv_value") == "Not specified" for v in parsed["quick_match"].values())
+        if parsed["scores"]["ats"] == 0 and missing_all:
+            min_prompt = f"""Return ONLY JSON. Use ALL keys exactly as shown.
+JSON:
+{SCORES_MIN_SCHEMA}
+
+Rules:
+- scores are 0-100 integers
+- match_quality must be one of: Strong Match, Good Match, Weak Match, Not a Match
+- If missing, use "Not specified"
+
+JOB DESCRIPTION:
+\"\"\"
+{jd_truncated}
+\"\"\"
+
+RESUME:
+\"\"\"
+{cv_truncated}
+\"\"\"
+"""
+            raw_min = _call_gemini(
+                SYSTEM_PROMPT,
+                min_prompt,
+                temperature=0.1,
+                max_output_tokens=450,
+                response_mime_type="application/json",
+                min_output_chars=40,
+            )
+            parsed_min = _safe_json_parse(raw_min) or {}
+            if not isinstance(parsed_min, dict) or not parsed_min:
+                parsed_min = _repair_json(raw_min, SCORES_MIN_SCHEMA, max_output_tokens=350) or {}
+            parsed_min = _coerce_scores_quickmatch(parsed_min)
+            parsed_min["keywords"] = parsed.get("keywords", {"jd": [], "cv": []})
+            parsed = parsed_min
+
+        missing_all = all(v.get("cv_value") == "Not specified" for v in parsed["quick_match"].values())
+
+        # If we got here, we have a structured payload
+        meta['status'] = 'ok' if parsed["scores"]["ats"] or not missing_all else 'partial'
         parsed['_meta'] = meta
         return parsed
     except Exception as exc:

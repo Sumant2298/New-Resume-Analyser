@@ -16,6 +16,7 @@ from llm_service import (
     generate_llm_insights,
     generate_llm_scores_quickmatch,
     generate_llm_categories,
+    generate_llm_skill_groups,
 )
 from skills_data import SKILL_CATEGORIES
 
@@ -300,6 +301,10 @@ def analyze_cv_against_jd(cv_text: str, jd_text: str) -> dict:
         bonus = [c for c in category_match.get('bonus_categories', []) if isinstance(c, str)]
         if key_categories and not missing:
             missing = [c for c in key_categories if c not in set(matched)]
+
+        skill_groups_data = generate_llm_skill_groups(cv_text, jd_text, key_categories)
+        if isinstance(skill_groups_data, dict) and skill_groups_data.get('skill_groups'):
+            category_match['skill_groups'] = skill_groups_data.get('skill_groups', [])
 
         skill_score = scores.get('skill_match')
         if not isinstance(skill_score, (int, float)):

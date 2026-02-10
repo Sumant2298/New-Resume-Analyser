@@ -20,16 +20,17 @@ logger = logging.getLogger(__name__)
 GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', '')
 GEMINI_MODEL = os.environ.get('GEMINI_MODEL', 'gemini-2.0-flash')
 GEMINI_TIMEOUT = int(os.environ.get('GEMINI_TIMEOUT', '45'))
+GEMINI_MIN_JSON_CHARS = int(os.environ.get('GEMINI_MIN_JSON_CHARS', '180'))
 LLM_ENABLED = bool(GEMINI_API_KEY)
 _MODEL_CACHE = {"ts": 0.0, "models": []}
 _LAST_WORKING_MODEL = None
 _PREFERRED_MODELS = [
-    "gemini-2.0-pro",
+    "gemini-1.5-flash",
     "gemini-2.0-flash",
     "gemini-2.5-flash",
-    "gemini-1.5-pro",
-    "gemini-1.5-flash",
     "gemini-1.0-pro",
+    "gemini-1.5-pro",
+    "gemini-2.0-pro",
 ]
 
 SYSTEM_PROMPT = """You are a strict JSON generator.
@@ -163,6 +164,47 @@ FULL_ANALYSIS_SCHEMA = """{
   }
 }"""
 
+SCORES_SCHEMA = """{
+  "scores": {"ats": 0, "text_similarity": 0, "skill_match": 0, "verb_alignment": 0},
+  "quick_match": {
+    "experience": {"cv_value": "", "jd_value": "", "match_quality": ""},
+    "education": {"cv_value": "", "jd_value": "", "match_quality": ""},
+    "skills": {"cv_value": "", "jd_value": "", "match_quality": ""},
+    "location": {"cv_value": "", "jd_value": "", "match_quality": ""}
+  },
+  "keywords": {"jd": [], "cv": []}
+}"""
+
+CATEGORIES_SCHEMA = """{
+  "key_categories": ["Category 1", "Category 2", "Category 3", "Category 4", "Category 5", "Category 6"],
+  "matched_categories": ["Category 1"],
+  "missing_categories": ["Category 2"],
+  "bonus_categories": ["Bonus Category"]
+}"""
+
+SKILL_GROUPS_MIN_SCHEMA = """{
+  "skill_groups": [
+    {
+      "category": "Category 1",
+      "importance": "Must-have|Nice-to-have",
+      "skills": [
+        {"name": "Skill A", "found": true},
+        {"name": "Skill B", "found": false}
+      ]
+    }
+  ]
+}"""
+
+INSIGHTS_SCHEMA = """{
+  "profile_summary": "",
+  "working_well": ["..."],
+  "needs_improvement": ["..."],
+  "skill_gap_tips": {"Skill": "Tip"},
+  "enhanced_suggestions": [
+    {"title": "...", "body": "...", "examples": ["Example 1", "Example 2"]}
+  ]
+}"""
+
 
 
 def _safe_json_parse(text: str):
@@ -192,6 +234,81 @@ def _safe_json_parse(text: str):
                 return ast.literal_eval(py_like)
             except Exception:
                 return None
+
+
+def _validate_scores_quickmatch(data: dict) -> bool:
+    if not isinstance(data, dict):
+        return False
+    scores = data.get("scores")
+    if not isinstance(scores, dict):
+        return False
+    required_scores = {"ats", "text_similarity", "skill_match", "verb_alignment"}
+    if not required_scores.issubset(scores.keys()):
+        return False
+
+    quick_match = data.get("quick_match")
+    if not isinstance(quick_match, dict):
+        return False
+    for field in ("experience", "education", "skills", "location"):
+        item = quick_match.get(field)
+        if not isinstance(item, dict):
+            return False
+        if "cv_value" not in item or "jd_value" not in item:
+            return False
+
+    keywords = data.get("keywords")
+    if not isinstance(keywords, dict):
+        return False
+    if not isinstance(keywords.get("jd"), list) or not isinstance(keywords.get("cv"), list):
+        return False
+    return True
+
+
+def _validate_categories(data: dict) -> bool:
+    if not isinstance(data, dict):
+        return False
+    key_categories = data.get("key_categories")
+    if not isinstance(key_categories, list) or len(key_categories) != 6:
+        return False
+    for name in ("matched_categories", "missing_categories", "bonus_categories"):
+        if not isinstance(data.get(name), list):
+            return False
+    return True
+
+
+def _validate_skill_groups(data: dict, key_categories: list[str]) -> bool:
+    if not isinstance(data, dict):
+        return False
+    groups = data.get("skill_groups")
+    if not isinstance(groups, list) or not groups:
+        return False
+    valid_categories = {c.strip().lower() for c in key_categories if isinstance(c, str)}
+    if not valid_categories:
+        return False
+    for group in groups:
+        if not isinstance(group, dict):
+            return False
+        cat = str(group.get("category", "")).strip().lower()
+        if cat not in valid_categories:
+            return False
+        skills = group.get("skills")
+        if not isinstance(skills, list) or not skills:
+            return False
+    return True
+
+
+def _validate_insights(data: dict) -> bool:
+    if not isinstance(data, dict):
+        return False
+    if not isinstance(data.get("profile_summary"), str):
+        return False
+    if not isinstance(data.get("enhanced_suggestions"), list):
+        return False
+    if not isinstance(data.get("working_well"), list):
+        return False
+    if not isinstance(data.get("needs_improvement"), list):
+        return False
+    return True
 
 
 def _repair_json(raw_text: str, schema_hint: str, max_output_tokens: int = 700) -> dict | None:
@@ -240,6 +357,8 @@ def _list_models() -> list[str]:
             methods = item.get("supportedGenerationMethods", [])
             if "generateContent" in methods and name.startswith("models/"):
                 models.append(name.replace("models/", ""))
+        if models:
+            logger.info("Gemini available models: %s", ", ".join(models[:12]))
         _MODEL_CACHE["models"] = models
         _MODEL_CACHE["ts"] = now
         return models
@@ -268,7 +387,8 @@ def _candidate_models() -> list[str]:
 
 def _call_gemini(system_prompt: str, user_prompt: str,
                  temperature: float = 0.2, max_output_tokens: int = 1500,
-                 response_mime_type: str | None = None) -> str:
+                 response_mime_type: str | None = None,
+                 min_output_chars: int | None = None) -> str:
     if not LLM_ENABLED:
         return ''
 
@@ -307,6 +427,9 @@ def _call_gemini(system_prompt: str, user_prompt: str,
     }
 
     last_error = None
+    if min_output_chars is None:
+        min_output_chars = GEMINI_MIN_JSON_CHARS
+
     for model in _candidate_models():
         url = (
             "https://generativelanguage.googleapis.com/v1beta/models/"
@@ -325,6 +448,12 @@ def _call_gemini(system_prompt: str, user_prompt: str,
                     logger.warning('Gemini returned no parts. Candidate=%s', str(cand)[:200])
                 text = ''.join(part.get('text', '') for part in parts)
                 global _LAST_WORKING_MODEL
+                # If output is too short (likely truncated), try next model
+                if finish == "MAX_TOKENS" and len(text) < min_output_chars:
+                    logger.warning('Gemini output too short (%s chars) on model=%s, trying next.',
+                                   len(text), model)
+                    last_error = f"short_output_{len(text)}"
+                    continue
                 _LAST_WORKING_MODEL = model
                 logger.info('Gemini response ok (chars=%s, model=%s)', len(text), model)
                 return text
@@ -390,6 +519,7 @@ Rules:
             temperature=0.2,
             max_output_tokens=800,
             response_mime_type="application/json",
+            min_output_chars=80,
         )
         parsed = _safe_json_parse(raw) or {}
         return parsed
@@ -433,6 +563,7 @@ Rules:
             temperature=0.2,
             max_output_tokens=700,
             response_mime_type="application/json",
+            min_output_chars=80,
         )
         data = _safe_json_parse(raw) or {}
         groups = data.get('skill_groups', [])
@@ -633,31 +764,16 @@ def generate_llm_scores_quickmatch(cv_text: str, jd_text: str) -> dict:
     cv_truncated = cv_text[:1800]
     jd_truncated = jd_text[:1500]
 
-    prompt = f"""Return ONLY JSON with this schema:
-{{
-  "scores": {{
-    "ats": 0,
-    "text_similarity": 0,
-    "skill_match": 0,
-    "verb_alignment": 0
-  }},
-  "quick_match": {{
-    "experience": {{"cv_value": "...", "jd_value": "...", "match_quality": "Strong Match|Good Match|Weak Match|Not a Match"}},
-    "education": {{"cv_value": "...", "jd_value": "...", "match_quality": "Strong Match|Good Match|Weak Match|Not a Match"}},
-    "skills": {{"cv_value": "...", "jd_value": "...", "match_quality": "Strong Match|Good Match|Weak Match|Not a Match"}},
-    "location": {{"cv_value": "...", "jd_value": "...", "match_quality": "Strong Match|Good Match|Weak Match|Not a Match"}}
-  }},
-  "keywords": {{
-    "jd": ["keyword1", "keyword2"],
-    "cv": ["keyword1", "keyword2"]
-  }}
-}}
+    prompt = f"""Return ONLY JSON. Use ALL keys exactly as shown.
+JSON:
+{SCORES_SCHEMA}
 
 Rules:
-- scores are 0-100 numbers
-- If a value is missing in CV or JD, use "Not specified"
-- keywords.jd and keywords.cv should each have 8-12 items
-- Return ONLY JSON
+- scores are 0-100 integers
+- match_quality must be one of: Strong Match, Good Match, Weak Match, Not a Match
+- keywords.jd and keywords.cv must each have 5-8 short items
+- Keep all strings short (<=8 words)
+- If missing, use "Not specified" or empty list
 
 JOB DESCRIPTION:
 \"\"\"
@@ -675,14 +791,15 @@ RESUME:
             SYSTEM_PROMPT,
             prompt,
             temperature=0.1,
-            max_output_tokens=900,
+            max_output_tokens=700,
             response_mime_type="application/json",
+            min_output_chars=80,
         )
         parsed = _safe_json_parse(raw) or {}
-        if not isinstance(parsed, dict) or not parsed:
-            parsed = _repair_json(raw, prompt, max_output_tokens=700) or {}
+        if not _validate_scores_quickmatch(parsed):
+            parsed = _repair_json(raw, SCORES_SCHEMA, max_output_tokens=500) or {}
 
-        if not isinstance(parsed, dict) or not parsed:
+        if not _validate_scores_quickmatch(parsed):
             meta['status'] = 'empty'
             meta['error'] = 'No JSON parsed from Gemini response'
             return {'_meta': meta}
@@ -706,32 +823,16 @@ def generate_llm_categories(cv_text: str, jd_text: str) -> dict:
     cv_truncated = cv_text[:2000]
     jd_truncated = jd_text[:1700]
 
-    prompt = f"""Return ONLY JSON with this schema:
-{{
-  "key_categories": ["Category 1", "Category 2", "Category 3", "Category 4", "Category 5", "Category 6"],
-  "matched_categories": ["Category 1"],
-  "missing_categories": ["Category 2"],
-  "bonus_categories": ["Bonus Category"],
-  "skill_groups": [
-    {{
-      "category": "Category 1",
-      "importance": "Must-have|Nice-to-have",
-      "skills": [
-        {{"name": "Skill A", "found": true}},
-        {{"name": "Skill B", "found": false}}
-      ]
-    }}
-  ]
-}}
+    prompt = f"""Return ONLY JSON. Use ALL keys exactly as shown.
+JSON:
+{CATEGORIES_SCHEMA}
 
 Rules:
 - key_categories must be EXACTLY 6 categories from the JD
 - matched_categories and missing_categories must be subsets of key_categories
 - bonus_categories are relevant to the JD but NOT in key_categories
-- Each category should be 1–4 words, title case
-- skill_groups must include the same 6 categories with 2–5 skills each
-- "found" must reflect whether the CV mentions that skill
-- Return ONLY JSON
+- Each category 1–3 words, title case
+- If unsure, still return 6 categories and best-effort matches
 
 JOB DESCRIPTION:
 \"\"\"
@@ -749,14 +850,15 @@ RESUME:
             SYSTEM_PROMPT,
             prompt,
             temperature=0.2,
-            max_output_tokens=1200,
+            max_output_tokens=600,
             response_mime_type="application/json",
+            min_output_chars=80,
         )
         parsed = _safe_json_parse(raw) or {}
-        if not isinstance(parsed, dict) or not parsed:
-            parsed = _repair_json(raw, prompt, max_output_tokens=800) or {}
+        if not _validate_categories(parsed):
+            parsed = _repair_json(raw, CATEGORIES_SCHEMA, max_output_tokens=500) or {}
 
-        if not isinstance(parsed, dict) or not parsed:
+        if not _validate_categories(parsed):
             meta['status'] = 'empty'
             meta['error'] = 'No JSON parsed from Gemini response'
             return {'_meta': meta}
@@ -766,6 +868,69 @@ RESUME:
         return parsed
     except Exception as exc:
         logger.warning('Gemini categories failed: %s', exc)
+        meta['status'] = 'error'
+        meta['error'] = str(exc)[:200]
+        return {'_meta': meta}
+
+def generate_llm_skill_groups(cv_text: str, jd_text: str, key_categories: list[str]) -> dict:
+    if not LLM_ENABLED:
+        logger.info('Gemini disabled (no GEMINI_API_KEY)')
+        return {}
+
+    if not key_categories:
+        return {}
+
+    meta = {'enabled': True, 'model': GEMINI_MODEL, 'status': 'pending'}
+    cv_truncated = cv_text[:1800]
+    jd_truncated = jd_text[:1600]
+    categories_csv = ", ".join(key_categories[:6])
+
+    prompt = f"""Return ONLY JSON. Use ALL keys exactly as shown.
+JSON:
+{SKILL_GROUPS_MIN_SCHEMA}
+
+Rules:
+- Use ONLY these categories: {categories_csv}
+- Return exactly 6 groups (one per category)
+- For each category, list 2-3 concrete skills from the JD
+- Set found=true only if the CV explicitly mentions the skill
+- Keep skill names 1–3 words
+- importance: Must-have if the JD implies required, else Nice-to-have
+
+JOB DESCRIPTION:
+\"\"\"
+{jd_truncated}
+\"\"\"
+
+RESUME:
+\"\"\"
+{cv_truncated}
+\"\"\"
+"""
+
+    try:
+        raw = _call_gemini(
+            SYSTEM_PROMPT,
+            prompt,
+            temperature=0.2,
+            max_output_tokens=700,
+            response_mime_type="application/json",
+            min_output_chars=80,
+        )
+        parsed = _safe_json_parse(raw) or {}
+        if not _validate_skill_groups(parsed, key_categories):
+            parsed = _repair_json(raw, SKILL_GROUPS_MIN_SCHEMA, max_output_tokens=500) or {}
+
+        if not _validate_skill_groups(parsed, key_categories):
+            meta['status'] = 'empty'
+            meta['error'] = 'No JSON parsed from Gemini response'
+            return {'_meta': meta}
+
+        meta['status'] = 'ok'
+        parsed['_meta'] = meta
+        return parsed
+    except Exception as exc:
+        logger.warning('Gemini skill groups failed: %s', exc)
         meta['status'] = 'error'
         meta['error'] = str(exc)[:200]
         return {'_meta': meta}
@@ -834,23 +999,19 @@ def generate_llm_insights(cv_text: str, jd_text: str, results: dict | None) -> d
         }
 
         # Shorter, JSON-only prompt for reliability
-        cv_truncated = cv_text[:1800]
-        jd_truncated = jd_text[:1400]
-        prompt = f"""Return ONLY JSON with this schema:
-{{
-  "profile_summary": "3-5 sentences",
-  "working_well": ["..."],
-  "needs_improvement": ["..."],
-  "skill_gap_tips": {{"Skill": "Tip"}},
-  "enhanced_suggestions": [
-    {{"title": "...", "body": "...", "examples": ["Example 1", "Example 2"]}}
-  ]
-}}
+        cv_truncated = cv_text[:1600]
+        jd_truncated = jd_text[:1200]
+        prompt = f"""Return ONLY JSON. Use ALL keys exactly as shown.
+JSON:
+{INSIGHTS_SCHEMA}
 
 Rules:
-- working_well and needs_improvement: 3-5 items each
-- enhanced_suggestions: 3-5 items
-- Return ONLY JSON
+- profile_summary: 2-3 short sentences
+- working_well: 2-3 items
+- needs_improvement: 2-3 items
+- enhanced_suggestions: 2-3 items; title <= 6 words; body <= 20 words; examples 1-2 items
+- skill_gap_tips: 2-3 items
+- Keep all text concise
 
 JOB DESCRIPTION:
 \"\"\"
@@ -867,12 +1028,16 @@ RESUME:
             SYSTEM_PROMPT,
             prompt,
             temperature=0.2,
-            max_output_tokens=1000,
+            max_output_tokens=700,
             response_mime_type="application/json",
+            min_output_chars=80,
         )
         llm_data = _safe_json_parse(raw) or {}
-        if not isinstance(llm_data, dict) or not llm_data:
-            llm_data = _repair_json(raw, prompt, max_output_tokens=800) or {}
+        if not _validate_insights(llm_data):
+            llm_data = _repair_json(raw, INSIGHTS_SCHEMA, max_output_tokens=500) or {}
+
+        if not _validate_insights(llm_data):
+            return {}
 
         validated: dict = {}
         if isinstance(llm_data.get('profile_summary'), str):

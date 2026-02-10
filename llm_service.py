@@ -11,15 +11,26 @@ import json
 import logging
 import os
 import re
+import time
 
 import requests
 
 logger = logging.getLogger(__name__)
 
 GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', '')
-GEMINI_MODEL = os.environ.get('GEMINI_MODEL', 'gemini-1.5-pro')
+GEMINI_MODEL = os.environ.get('GEMINI_MODEL', 'gemini-2.0-flash')
 GEMINI_TIMEOUT = int(os.environ.get('GEMINI_TIMEOUT', '45'))
 LLM_ENABLED = bool(GEMINI_API_KEY)
+_MODEL_CACHE = {"ts": 0.0, "models": []}
+_LAST_WORKING_MODEL = None
+_PREFERRED_MODELS = [
+    "gemini-2.0-pro",
+    "gemini-2.0-flash",
+    "gemini-2.5-flash",
+    "gemini-1.5-pro",
+    "gemini-1.5-flash",
+    "gemini-1.0-pro",
+]
 
 SYSTEM_PROMPT = """You are a strict JSON generator.
 Return ONLY valid JSON. No markdown, no code fences, no commentary.
@@ -183,16 +194,56 @@ def _safe_json_parse(text: str):
                 return None
 
 
+def _list_models() -> list[str]:
+    if not GEMINI_API_KEY:
+        return []
+    now = time.time()
+    if _MODEL_CACHE["models"] and now - _MODEL_CACHE["ts"] < 300:
+        return _MODEL_CACHE["models"]
+    try:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models?key={GEMINI_API_KEY}"
+        resp = requests.get(url, timeout=10)
+        if not resp.ok:
+            return []
+        data = resp.json()
+        models = []
+        for item in data.get("models", []):
+            name = item.get("name", "")
+            methods = item.get("supportedGenerationMethods", [])
+            if "generateContent" in methods and name.startswith("models/"):
+                models.append(name.replace("models/", ""))
+        _MODEL_CACHE["models"] = models
+        _MODEL_CACHE["ts"] = now
+        return models
+    except Exception:
+        return []
+
+
+def _candidate_models() -> list[str]:
+    candidates: list[str] = []
+    if _LAST_WORKING_MODEL:
+        candidates.append(_LAST_WORKING_MODEL)
+    if GEMINI_MODEL and GEMINI_MODEL not in candidates:
+        candidates.append(GEMINI_MODEL)
+    # Prefer known good models if available from listModels
+    available = set(_list_models())
+    for m in _PREFERRED_MODELS:
+        if m in available and m not in candidates:
+            candidates.append(m)
+    # If listModels returned nothing, fall back to preference order
+    if not available:
+        for m in _PREFERRED_MODELS:
+            if m not in candidates:
+                candidates.append(m)
+    return candidates[:6]
+
+
 def _call_gemini(system_prompt: str, user_prompt: str,
                  temperature: float = 0.2, max_output_tokens: int = 1500,
                  response_mime_type: str | None = None) -> str:
     if not LLM_ENABLED:
         return ''
 
-    url = (
-        "https://generativelanguage.googleapis.com/v1beta/models/"
-        f"{GEMINI_MODEL}:generateContent?key={GEMINI_API_KEY}"
-    )
     headers = {
         "Content-Type": "application/json",
     }
@@ -227,21 +278,42 @@ def _call_gemini(system_prompt: str, user_prompt: str,
         ],
     }
 
-    response = requests.post(url, headers=headers, json=payload, timeout=GEMINI_TIMEOUT)
-    if not response.ok:
-        raise RuntimeError(f"Gemini error: {response.status_code} {response.text}")
+    last_error = None
+    for model in _candidate_models():
+        url = (
+            "https://generativelanguage.googleapis.com/v1beta/models/"
+            f"{model}:generateContent?key={GEMINI_API_KEY}"
+        )
+        try:
+            response = requests.post(url, headers=headers, json=payload, timeout=GEMINI_TIMEOUT)
+            if response.ok:
+                data = response.json()
+                cand = data.get('candidates', [{}])[0]
+                parts = cand.get('content', {}).get('parts', [])
+                finish = cand.get('finishReason')
+                if finish:
+                    logger.info('Gemini finishReason=%s', finish)
+                if not parts:
+                    logger.warning('Gemini returned no parts. Candidate=%s', str(cand)[:200])
+                text = ''.join(part.get('text', '') for part in parts)
+                global _LAST_WORKING_MODEL
+                _LAST_WORKING_MODEL = model
+                logger.info('Gemini response ok (chars=%s, model=%s)', len(text), model)
+                return text
 
-    data = response.json()
-    cand = data.get('candidates', [{}])[0]
-    parts = cand.get('content', {}).get('parts', [])
-    finish = cand.get('finishReason')
-    if finish:
-        logger.info('Gemini finishReason=%s', finish)
-    if not parts:
-        logger.warning('Gemini returned no parts. Candidate=%s', str(cand)[:200])
-    text = ''.join(part.get('text', '') for part in parts)
-    logger.info('Gemini response ok (chars=%s)', len(text))
-    return text
+            # 404: model not supported, try next
+            if response.status_code == 404:
+                last_error = f"{response.status_code} {response.text}"
+                logger.warning('Gemini model not found: %s', model)
+                continue
+
+            # Non-404 errors are fatal
+            raise RuntimeError(f"Gemini error: {response.status_code} {response.text}")
+        except Exception as exc:
+            last_error = str(exc)
+            continue
+
+    raise RuntimeError(f"Gemini error: {last_error or 'no supported model found'}")
 
 
 # ---------------------------------------------------------------------------

@@ -430,7 +430,7 @@ def analyze():
 
     # Log usage in Firestore (non-blocking)
     try:
-        if user_id:
+        if user_id and firestore_db is not None:
             firestore_db.collection('analyses').add({
                 'userId': user_id,
                 'email': user_email,

@@ -84,6 +84,42 @@ RECRUITER_SCHEMA = """{
   "skill_gap_tips": {"Skill": "Actionable tip"}
 }"""
 
+COMBINED_SCHEMA = """{
+  "category_match": {
+    "key_categories": ["Category 1", "Category 2", "..."],
+    "matched_categories": ["Category 1"],
+    "missing_categories": ["Category 2"],
+    "bonus_categories": ["Bonus Category A", "Bonus Category B"],
+    "skill_groups": [
+      {
+        "category": "Category 1",
+        "skills": ["Skill A", "Skill B"],
+        "importance": "Must-have" or "Nice-to-have"
+      }
+    ]
+  },
+  "insights": {
+    "profile_summary": "3-5 sentences. Start with overall assessment. Use you/your.",
+    "quick_match_insights": {
+      "experience": "One sentence.",
+      "education": "One sentence.",
+      "skills": "One sentence.",
+      "location": "One sentence."
+    },
+    "enhanced_suggestions": [
+      {
+        "title": "Short recruiter-style title",
+        "body": "Specific, actionable guidance.",
+        "examples": ["Example rewrite 1", "Example rewrite 2"]
+      }
+    ],
+    "working_well": ["Specific strength"],
+    "needs_improvement": ["Specific gap"],
+    "ats_score": 45,
+    "skill_gap_tips": {"Skill": "Actionable tip"}
+  }
+}"""
+
 
 def _safe_json_parse(text: str):
     try:
@@ -229,6 +265,56 @@ Rules:
     except Exception as exc:
         logger.warning('Gemini JD skill extraction failed: %s', exc)
         return []
+
+
+# ---------------------------------------------------------------------------
+# Single-call bundle (categories + recruiter insights)
+# ---------------------------------------------------------------------------
+
+def generate_llm_bundle(cv_text: str, jd_text: str) -> dict:
+    if not LLM_ENABLED:
+        logger.info('Gemini disabled (no GEMINI_API_KEY)')
+        return {}
+
+    cv_truncated = cv_text[:3500]
+    jd_truncated = jd_text[:2200]
+
+    prompt = f"""Analyze the CV against the JD and return BOTH:
+1) Top 6 skill categories with matches/missing/bonus, and skill groups
+2) Recruiter-style insights + actionable suggestions
+
+JOB DESCRIPTION:
+\"\"\"
+{jd_truncated}
+\"\"\"
+
+RESUME:
+\"\"\"
+{cv_truncated}
+\"\"\"
+
+Return ONLY valid JSON with this schema:
+{COMBINED_SCHEMA}
+
+Rules:
+- key_categories must be EXACTLY 6 categories from the JD
+- matched_categories and missing_categories must be subsets of key_categories
+- bonus_categories are relevant to the JD but NOT in key_categories
+- Each category should be 1–4 words, title case
+- skill_groups should include the same 6 categories (2–5 skills each)
+- enhanced_suggestions should be 3-5 items
+- Return ONLY valid JSON
+"""
+
+    try:
+        raw = _call_gemini(SYSTEM_PROMPT, prompt, temperature=0.3, max_output_tokens=1200)
+        parsed = _safe_json_parse(raw) or {}
+        if not isinstance(parsed, dict):
+            return {}
+        return parsed
+    except Exception as exc:
+        logger.warning('Gemini bundle failed: %s', exc)
+        return {}
 
 
 # ---------------------------------------------------------------------------

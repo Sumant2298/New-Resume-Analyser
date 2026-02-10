@@ -9,10 +9,8 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
 from llm_service import (
-    generate_llm_insights,
     merge_suggestions,
-    extract_jd_top_skills,
-    extract_category_match,
+    generate_llm_bundle,
 )
 from skills_data import SKILL_CATEGORIES
 
@@ -175,9 +173,10 @@ def analyze_cv_against_jd(cv_text: str, jd_text: str) -> dict:
     }
 
     # -------------------------------------------------------------------
-    # Gemini category match (top 6 key categories from JD)
+    # Gemini single-call bundle: categories + recruiter insights
     # -------------------------------------------------------------------
-    category_match = extract_category_match(cv_text, jd_text)
+    llm_bundle = generate_llm_bundle(cv_text, jd_text)
+    category_match = llm_bundle.get('category_match', {}) if isinstance(llm_bundle, dict) else {}
     if category_match and isinstance(category_match.get('key_categories'), list):
         key_categories = [c.strip() for c in category_match.get('key_categories', []) if isinstance(c, str)][:6]
         matched_categories = [c.strip() for c in category_match.get('matched_categories', []) if isinstance(c, str)]
@@ -227,23 +226,18 @@ def analyze_cv_against_jd(cv_text: str, jd_text: str) -> dict:
         results['quick_match']['skills']['cv_value'] = f'{len(matched)}/{len(key_categories)} match'
         results['quick_match']['skills']['jd_value'] = f'{len(key_categories)} required'
 
-    # LLM-powered: extract top JD skill groups and match against CV
-    top_jd_skills = []
-    if results.get('category_match', {}).get('skill_groups'):
-        top_jd_skills = results['category_match']['skill_groups']
-    else:
-        top_jd_skills = extract_jd_top_skills(jd_text)
+    # LLM-powered: match against top skill groups (from bundle)
+    top_jd_skills = results.get('category_match', {}).get('skill_groups', [])
     if top_jd_skills:
         results['top_skill_groups'] = match_top_skills(top_jd_skills, cv_text)
-        # Update quick match skills display with top skills data
         total_skills = sum(g['total'] for g in results['top_skill_groups'])
         found_skills = sum(g['matched'] for g in results['top_skill_groups'])
         results['quick_match']['skills']['cv_value'] = f'{found_skills}/{total_skills} key skills'
     else:
         results['top_skill_groups'] = []
 
-    # LLM-enhanced insights (non-blocking: empty dict on failure)
-    llm_insights = generate_llm_insights(cv_text, jd_text, results)
+    # LLM-enhanced insights (from bundle)
+    llm_insights = llm_bundle.get('insights', {}) if isinstance(llm_bundle, dict) else {}
     results['llm_insights'] = llm_insights
 
     # ATS score: use LLM estimate if available, otherwise compute from NLP

@@ -38,6 +38,51 @@ GUARDRAILS:
 6. Return ONLY valid JSON with no markdown
 """
 
+CATEGORY_MATCH_SCHEMA = """{
+  "key_categories": ["Category 1", "Category 2", "..."],
+  "matched_categories": ["Category 1"],
+  "missing_categories": ["Category 2"],
+  "bonus_categories": ["Bonus Category A", "Bonus Category B"],
+  "skill_groups": [
+    {
+      "category": "Category 1",
+      "skills": ["Skill A", "Skill B"],
+      "importance": "Must-have" or "Nice-to-have"
+    }
+  ]
+}"""
+
+SKILL_GROUPS_SCHEMA = """{
+  "skill_groups": [
+    {
+      "category": "Category name",
+      "skills": ["Skill 1", "Skill 2"],
+      "importance": "Must-have" or "Nice-to-have"
+    }
+  ]
+}"""
+
+RECRUITER_SCHEMA = """{
+  "profile_summary": "3-5 sentences. Start with overall assessment. Use you/your.",
+  "quick_match_insights": {
+    "experience": "One sentence.",
+    "education": "One sentence.",
+    "skills": "One sentence.",
+    "location": "One sentence."
+  },
+  "enhanced_suggestions": [
+    {
+      "title": "Short recruiter-style title",
+      "body": "Specific, actionable guidance.",
+      "examples": ["Example rewrite 1", "Example rewrite 2"]
+    }
+  ],
+  "working_well": ["Specific strength"],
+  "needs_improvement": ["Specific gap"],
+  "ats_score": 45,
+  "skill_gap_tips": {"Skill": "Actionable tip"}
+}"""
+
 
 def _safe_json_parse(text: str):
     try:
@@ -114,19 +159,7 @@ RESUME:
 \"\"\"
 
 Return ONLY valid JSON with this schema:
-{{
-  \"key_categories\": [\"Category 1\", \"Category 2\", \"...\"],
-  \"matched_categories\": [\"Category 1\"],
-  \"missing_categories\": [\"Category 2\"],
-  \"bonus_categories\": [\"Bonus Category A\", \"Bonus Category B\"],
-  \"skill_groups\": [
-    {{
-      \"category\": \"Category 1\",
-      \"skills\": [\"Skill A\", \"Skill B\"],
-      \"importance\": \"Must-have\" or \"Nice-to-have\"
-    }}
-  ]
-}}
+{CATEGORY_MATCH_SCHEMA}
 
 Rules:
 - key_categories must be EXACTLY 6 categories from the JD
@@ -165,15 +198,7 @@ JOB DESCRIPTION:
 \"\"\"
 
 Return JSON with this exact structure:
-{{
-  \"skill_groups\": [
-    {{
-      \"category\": \"Category name\",
-      \"skills\": [\"Skill 1\", \"Skill 2\"],
-      \"importance\": \"Must-have\" or \"Nice-to-have\"
-    }}
-  ]
-}}
+{SKILL_GROUPS_SCHEMA}
 
 Rules:
 - Return exactly 6 skill groups
@@ -241,26 +266,7 @@ Missing Action Verbs: {missing_verbs}
 Job Description:\n{jd_truncated}\n\nCandidate CV:\n{cv_truncated}
 
 Return JSON:
-{
-  "profile_summary": "3-5 sentences. Start with overall assessment. Use you/your.",
-  "quick_match_insights": {
-    "experience": "One sentence.",
-    "education": "One sentence.",
-    "skills": "One sentence.",
-    "location": "One sentence."
-  },
-  "enhanced_suggestions": [
-    {
-      "title": "Short recruiter-style title",
-      "body": "Specific, actionable guidance.",
-      "examples": ["Example rewrite 1", "Example rewrite 2"]
-    }
-  ],
-  "working_well": ["Specific strength"],
-  "needs_improvement": ["Specific gap"],
-  "ats_score": 45,
-  "skill_gap_tips": {"Skill": "Actionable tip"}
-}
+{RECRUITER_SCHEMA}
 
 Rules:
 - Provide 3-5 enhanced_suggestions ranked by impact

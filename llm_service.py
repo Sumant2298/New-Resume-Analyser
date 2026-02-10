@@ -58,10 +58,12 @@ def _call_gemini(system_prompt: str, user_prompt: str,
     if not LLM_ENABLED:
         return ''
 
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
+    url = (
+        "https://generativelanguage.googleapis.com/v1beta/models/"
+        f"{GEMINI_MODEL}:generateContent?key={GEMINI_API_KEY}"
+    )
     headers = {
         "Content-Type": "application/json",
-        "x-goog-api-key": GEMINI_API_KEY,
     }
     full_prompt = f"{system_prompt}\n\n{user_prompt}"
 
@@ -98,6 +100,7 @@ def extract_category_match(cv_text: str, jd_text: str) -> dict:
     bonus_categories, and optional skill_groups.
     """
     if not LLM_ENABLED:
+        logger.info('Gemini disabled (no GEMINI_API_KEY)')
         return {}
 
     user_prompt = f"""JOB DESCRIPTION:
@@ -149,6 +152,7 @@ Rules:
 
 def extract_jd_top_skills(jd_text: str) -> list[dict]:
     if not LLM_ENABLED:
+        logger.info('Gemini disabled (no GEMINI_API_KEY)')
         return []
 
     jd_truncated = jd_text[:2000]

@@ -1,6 +1,7 @@
-node_modules
-.next
+__pycache__/
+*.pyc
 .env
-.env.local
-.env.*.local
-.DS_Store
+venv/
+*.egg-info/
+collected_cvs/
+users.db

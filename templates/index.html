@@ -1,0 +1,304 @@
+{% extends "base.html" %}
+{% block title %}LevelUpX — Beat the ATS. Land the Interview.{% endblock %}
+{% block content %}
+
+<!-- Hero -->
+<section class="relative bg-gradient-to-br from-brand-700 via-brand-600 to-emerald-500 text-white overflow-hidden">
+    <div class="absolute inset-0 opacity-10">
+        <div class="absolute -top-24 -right-24 w-96 h-96 bg-white rounded-full blur-3xl"></div>
+        <div class="absolute -bottom-24 -left-24 w-72 h-72 bg-emerald-300 rounded-full blur-3xl"></div>
+    </div>
+    <div class="relative max-w-7xl mx-auto px-4 sm:px-6 py-10 sm:py-14">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
+            <!-- Left — Copy -->
+            <div class="anim-fade-up">
+                <div class="inline-flex items-center gap-2 bg-white/10 backdrop-blur-sm px-3 py-1.5 rounded-full text-xs font-semibold mb-4 text-white/80">
+                    <svg class="w-3.5 h-3.5 text-emerald-300" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                    </svg>
+                    AI-Powered Resume Intelligence
+                </div>
+                <h1 class="text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight mb-4 leading-tight">
+                    Stop guessing.<br>
+                    <span class="text-emerald-300">Know your ATS score</span><br>
+                    before you apply.
+                </h1>
+                <p class="text-base sm:text-lg text-white/70 mb-6 max-w-xl leading-relaxed">
+                    Upload your resume, paste a job description, and get an instant
+                    recruiter-grade analysis with actionable feedback.
+                </p>
+                <div class="flex flex-wrap gap-4 items-center mb-8">
+                    <a href="#analyze-form" class="inline-flex items-center gap-2 bg-white text-brand-700 font-bold py-3 px-7 rounded-xl shadow-lg hover:shadow-xl hover:bg-slate-50 transition-all">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"/>
+                        </svg>
+                        Analyze My Resume
+                    </a>
+                    <span class="text-sm text-white/50">Free &mdash; sign in with Google to continue</span>
+                </div>
+                <!-- Trust signals -->
+                <div class="grid grid-cols-3 gap-4 max-w-sm">
+                    <div class="text-center bg-white/10 backdrop-blur-sm rounded-lg px-3 py-2">
+                        <div class="text-lg font-extrabold text-emerald-300">30s</div>
+                        <div class="text-[10px] text-white/50">Instant Analysis</div>
+                    </div>
+                    <div class="text-center bg-white/10 backdrop-blur-sm rounded-lg px-3 py-2">
+                        <div class="text-lg font-extrabold text-emerald-300">ATS</div>
+                        <div class="text-[10px] text-white/50">Score Included</div>
+                    </div>
+                    <div class="text-center bg-white/10 backdrop-blur-sm rounded-lg px-3 py-2">
+                        <div class="text-lg font-extrabold text-emerald-300">AI</div>
+                        <div class="text-[10px] text-white/50">Recruiter Insights</div>
+                    </div>
+                </div>
+            </div>
+            <!-- Right — Illustration -->
+            <div class="hidden lg:block anim-fade-up-2">
+                <div class="relative">
+                    <!-- Decorative floating cards simulating a dashboard -->
+                    <div class="bg-white/10 backdrop-blur-md rounded-2xl p-6 border border-white/20 shadow-2xl">
+                        <!-- Mock ATS score ring -->
+                        <div class="flex items-center gap-5 mb-5">
+                            <div class="relative w-20 h-20 flex-shrink-0">
+                                <svg class="w-20 h-20 -rotate-90" viewBox="0 0 100 100">
+                                    <circle cx="50" cy="50" r="42" fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="8"/>
+                                    <circle cx="50" cy="50" r="42" fill="none" stroke="#4ade80" stroke-width="8" stroke-linecap="round" stroke-dasharray="264" stroke-dashoffset="66"/>
+                                </svg>
+                                <div class="absolute inset-0 flex items-center justify-center">
+                                    <span class="text-xl font-extrabold text-white">75%</span>
+                                </div>
+                            </div>
+                            <div>
+                                <p class="text-sm font-bold text-white/90">ATS Score</p>
+                                <p class="text-xs text-white/50">Strong match — likely gets an interview</p>
+                            </div>
+                        </div>
+                        <!-- Mock quick match bars -->
+                        <div class="space-y-2.5">
+                            <div class="flex items-center justify-between">
+                                <span class="text-xs text-white/60 font-medium">Experience</span>
+                                <div class="flex items-center gap-2">
+                                    <div class="w-32 bg-white/10 rounded-full h-1.5"><div class="h-1.5 rounded-full bg-green-400" style="width:85%"></div></div>
+                                    <span class="text-xs text-green-300 font-bold">✓✓</span>
+                                </div>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <span class="text-xs text-white/60 font-medium">Skills</span>
+                                <div class="flex items-center gap-2">
+                                    <div class="w-32 bg-white/10 rounded-full h-1.5"><div class="h-1.5 rounded-full bg-green-400" style="width:70%"></div></div>
+                                    <span class="text-xs text-green-300 font-bold">✓</span>
+                                </div>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <span class="text-xs text-white/60 font-medium">Education</span>
+                                <div class="flex items-center gap-2">
+                                    <div class="w-32 bg-white/10 rounded-full h-1.5"><div class="h-1.5 rounded-full bg-green-400" style="width:90%"></div></div>
+                                    <span class="text-xs text-green-300 font-bold">✓✓</span>
+                                </div>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <span class="text-xs text-white/60 font-medium">Keywords</span>
+                                <div class="flex items-center gap-2">
+                                    <div class="w-32 bg-white/10 rounded-full h-1.5"><div class="h-1.5 rounded-full bg-amber-400" style="width:55%"></div></div>
+                                    <span class="text-xs text-amber-300 font-bold">~</span>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Mock skill tags -->
+                        <div class="mt-5 pt-4 border-t border-white/10">
+                            <p class="text-[10px] text-white/40 font-semibold uppercase mb-2">Matched Skills</p>
+                            <div class="flex flex-wrap gap-1.5">
+                                <span class="bg-green-400/20 text-green-200 text-[10px] font-medium px-2 py-0.5 rounded-md">Python</span>
+                                <span class="bg-green-400/20 text-green-200 text-[10px] font-medium px-2 py-0.5 rounded-md">React</span>
+                                <span class="bg-green-400/20 text-green-200 text-[10px] font-medium px-2 py-0.5 rounded-md">AWS</span>
+                                <span class="bg-green-400/20 text-green-200 text-[10px] font-medium px-2 py-0.5 rounded-md">SQL</span>
+                                <span class="bg-red-400/20 text-red-200 text-[10px] font-medium px-2 py-0.5 rounded-md line-through">Kubernetes</span>
+                                <span class="bg-red-400/20 text-red-200 text-[10px] font-medium px-2 py-0.5 rounded-md line-through">Terraform</span>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Floating accent card -->
+                    <div class="absolute -bottom-3 -left-3 bg-emerald-400/20 backdrop-blur-sm rounded-xl px-4 py-2.5 border border-emerald-300/30 shadow-lg">
+                        <div class="flex items-center gap-2">
+                            <svg class="w-4 h-4 text-emerald-300" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
+                            <span class="text-xs font-bold text-emerald-200">12/17 skills matched</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Form -->
+<form id="analyze-form" action="{{ url_for('analyze') }}" method="post" enctype="multipart/form-data"
+      class="max-w-7xl mx-auto px-4 sm:px-6 -mt-8 relative z-10">
+    <input type="hidden" name="id_token" id="id_token" class="id-token-field">
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+
+        <!-- ===================== CV Panel ===================== -->
+        <div class="bg-white rounded-2xl shadow-xl border border-slate-100 overflow-hidden anim-fade-up-1">
+            <div class="bg-gradient-to-r from-brand-600 to-brand-500 px-6 py-3">
+                <h2 class="text-white font-semibold flex items-center gap-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+                    Your CV / Resume
+                </h2>
+            </div>
+            <!-- Tabs -->
+            <div class="flex border-b border-slate-200" role="tablist">
+                <button type="button" class="cv-tab flex-1 py-2.5 text-sm font-medium text-center transition border-b-2 border-brand-500 text-brand-600" data-target="cv-upload" onclick="switchTab('cv', this, 'cv-upload')">Upload File</button>
+                <button type="button" class="cv-tab flex-1 py-2.5 text-sm font-medium text-center transition border-b-2 border-transparent text-slate-400 hover:text-slate-600" data-target="cv-paste" onclick="switchTab('cv', this, 'cv-paste')">Paste Text</button>
+                <button type="button" class="cv-tab flex-1 py-2.5 text-sm font-medium text-center transition border-b-2 border-transparent text-slate-400 hover:text-slate-600" data-target="cv-linkedin" onclick="switchTab('cv', this, 'cv-linkedin')">LinkedIn URL</button>
+            </div>
+            <!-- Tab Content -->
+            <div class="p-6">
+                <div id="cv-upload" class="cv-panel">
+                    <label class="flex flex-col items-center justify-center w-full h-40 border-2 border-dashed border-slate-300 rounded-xl cursor-pointer hover:border-brand-400 hover:bg-brand-50/30 transition group">
+                        <svg class="w-10 h-10 text-slate-300 group-hover:text-brand-400 transition mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
+                        <span class="text-sm text-slate-500 group-hover:text-brand-600 transition font-medium">Drop a file or click to browse</span>
+                        <span class="text-xs text-slate-400 mt-1">PDF, DOCX, or TXT (max 10 MB)</span>
+                        <input type="file" name="cv_file" accept=".pdf,.docx,.txt" class="hidden" id="cv_file_input">
+                    </label>
+                    <p class="text-xs text-brand-600 font-medium mt-2 hidden" id="cv_file_label"></p>
+                </div>
+                <div id="cv-paste" class="cv-panel hidden">
+                    <textarea name="cv_text" rows="8" class="w-full border border-slate-200 rounded-xl p-4 text-sm focus:ring-2 focus:ring-brand-400 focus:border-transparent resize-y placeholder:text-slate-400" placeholder="Paste your full CV / resume text here..."></textarea>
+                </div>
+                <div id="cv-linkedin" class="cv-panel hidden">
+                    <div class="space-y-3">
+                        <div class="flex items-start gap-2 p-3 bg-blue-50 rounded-xl">
+                            <svg class="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 24 24"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+                            <div>
+                                <span class="text-xs text-blue-700 font-medium">Paste your public LinkedIn profile URL below.</span>
+                                <span class="text-xs text-blue-500 block mt-0.5">Tip: If the URL doesn't work, LinkedIn may be blocking server access. Use <button type="button" class="underline font-medium text-blue-700 hover:text-blue-900" onclick="switchTab('cv', document.querySelector('.cv-tab[data-target=cv-paste]'), 'cv-paste')">Paste Text</button> instead — go to your LinkedIn profile, select all text (Ctrl+A / Cmd+A), copy, and paste it here.</span>
+                            </div>
+                        </div>
+                        <input type="url" name="cv_url" class="w-full border border-slate-200 rounded-xl p-4 text-sm focus:ring-2 focus:ring-brand-400 focus:border-transparent placeholder:text-slate-400" placeholder="https://www.linkedin.com/in/your-profile">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===================== JD Panel ===================== -->
+        <div class="bg-white rounded-2xl shadow-xl border border-slate-100 overflow-hidden anim-fade-up-2">
+            <div class="bg-gradient-to-r from-emerald-600 to-emerald-500 px-6 py-3">
+                <h2 class="text-white font-semibold flex items-center gap-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+                    Job Description
+                </h2>
+            </div>
+            <!-- Tabs -->
+            <div class="flex border-b border-slate-200" role="tablist">
+                <button type="button" class="jd-tab flex-1 py-2.5 text-sm font-medium text-center transition border-b-2 border-emerald-500 text-emerald-600" data-target="jd-upload" onclick="switchTab('jd', this, 'jd-upload')">Upload File</button>
+                <button type="button" class="jd-tab flex-1 py-2.5 text-sm font-medium text-center transition border-b-2 border-transparent text-slate-400 hover:text-slate-600" data-target="jd-paste" onclick="switchTab('jd', this, 'jd-paste')">Paste Text</button>
+                <button type="button" class="jd-tab flex-1 py-2.5 text-sm font-medium text-center transition border-b-2 border-transparent text-slate-400 hover:text-slate-600" data-target="jd-url" onclick="switchTab('jd', this, 'jd-url')">Job URL</button>
+            </div>
+            <!-- Tab Content -->
+            <div class="p-6">
+                <div id="jd-upload" class="jd-panel">
+                    <label class="flex flex-col items-center justify-center w-full h-40 border-2 border-dashed border-slate-300 rounded-xl cursor-pointer hover:border-emerald-400 hover:bg-emerald-50/30 transition group">
+                        <svg class="w-10 h-10 text-slate-300 group-hover:text-emerald-400 transition mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
+                        <span class="text-sm text-slate-500 group-hover:text-emerald-600 transition font-medium">Drop a file or click to browse</span>
+                        <span class="text-xs text-slate-400 mt-1">PDF, DOCX, or TXT (max 10 MB)</span>
+                        <input type="file" name="jd_file" accept=".pdf,.docx,.txt" class="hidden" id="jd_file_input">
+                    </label>
+                    <p class="text-xs text-emerald-600 font-medium mt-2 hidden" id="jd_file_label"></p>
+                </div>
+                <div id="jd-paste" class="jd-panel hidden">
+                    <textarea name="jd_text" rows="8" class="w-full border border-slate-200 rounded-xl p-4 text-sm focus:ring-2 focus:ring-emerald-400 focus:border-transparent resize-y placeholder:text-slate-400" placeholder="Paste the full job description here..."></textarea>
+                </div>
+                <div id="jd-url" class="jd-panel hidden">
+                    <div class="space-y-3">
+                        <div class="flex items-center gap-2 p-3 bg-emerald-50 rounded-xl">
+                            <svg class="w-5 h-5 text-emerald-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/></svg>
+                            <span class="text-xs text-emerald-700">Paste any job posting URL from Indeed, LinkedIn, Glassdoor, or company career pages.</span>
+                        </div>
+                        <input type="url" name="jd_url" class="w-full border border-slate-200 rounded-xl p-4 text-sm focus:ring-2 focus:ring-emerald-400 focus:border-transparent placeholder:text-slate-400" placeholder="https://www.indeed.com/viewjob?jk=...">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Consent Toggle -->
+    <div class="bg-white rounded-2xl shadow-lg border border-slate-100 p-5 mb-6 max-w-2xl mx-auto anim-fade-up-3">
+        <label for="cv_consent" class="flex items-center gap-4 cursor-pointer">
+            <div class="relative">
+                <input type="checkbox" name="cv_consent" id="cv_consent" value="yes" class="sr-only peer">
+                <div class="w-11 h-6 bg-slate-200 rounded-full peer-checked:bg-brand-500 transition"></div>
+                <div class="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow peer-checked:translate-x-5 transition"></div>
+            </div>
+            <div>
+                <span class="text-sm font-semibold text-slate-700">Allow CV storage for recruitment</span>
+                <p class="text-xs text-slate-400 mt-0.5">Optional. Your CV will only be used for potential job opportunities.</p>
+            </div>
+        </label>
+    </div>
+
+    <!-- Submit -->
+    <div class="text-center mb-12 anim-fade-up-4">
+        <button type="submit" id="submitBtn"
+                class="inline-flex items-center gap-2 bg-gradient-to-r from-brand-600 to-emerald-500 hover:from-brand-700 hover:to-emerald-600 text-white font-semibold py-3.5 px-12 rounded-xl shadow-lg hover:shadow-xl transition-all text-lg">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>
+            <span id="btnText">Level Up My CV</span>
+            <svg id="btnSpinner" class="w-5 h-5 spinner hidden" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+        </button>
+    </div>
+</form>
+
+<script>
+/* Tab Switching */
+function switchTab(group, btn, targetId) {
+    const tabClass = group + '-tab';
+    const panelClass = group + '-panel';
+    const isCV = group === 'cv';
+    const activeColor = isCV ? 'border-brand-500 text-brand-600' : 'border-emerald-500 text-emerald-600';
+
+    document.querySelectorAll('.' + tabClass).forEach(t => {
+        t.className = t.className.replace(/border-brand-500|border-emerald-500/g, 'border-transparent')
+                                   .replace(/text-brand-600|text-emerald-600/g, 'text-slate-400');
+    });
+    btn.classList.remove('border-transparent', 'text-slate-400');
+    activeColor.split(' ').forEach(c => btn.classList.add(c));
+
+    document.querySelectorAll('.' + panelClass).forEach(p => p.classList.add('hidden'));
+    document.getElementById(targetId).classList.remove('hidden');
+}
+
+/* File input label update */
+['cv_file_input', 'jd_file_input'].forEach(id => {
+    const input = document.getElementById(id);
+    if (!input) return;
+    input.addEventListener('change', function() {
+        const labelId = id.replace('_input', '_label');
+        const label = document.getElementById(labelId);
+        if (this.files.length > 0) {
+            label.textContent = 'Selected: ' + this.files[0].name;
+            label.classList.remove('hidden');
+        } else {
+            label.classList.add('hidden');
+        }
+    });
+});
+
+/* Loading state on submit */
+document.getElementById('analyze-form').addEventListener('submit', function(event) {
+    const token = localStorage.getItem('firebase_id_token');
+    const tokenField = document.getElementById('id_token');
+    if (tokenField) tokenField.value = token || '';
+    if (!token) {
+        event.preventDefault();
+        alert('Please sign in with Google before analyzing.');
+        return;
+    }
+    const btn = document.getElementById('submitBtn');
+    const text = document.getElementById('btnText');
+    const spin = document.getElementById('btnSpinner');
+    btn.disabled = true;
+    btn.classList.add('opacity-80', 'cursor-wait');
+    text.textContent = 'Analyzing...';
+    spin.classList.remove('hidden');
+});
+</script>
+{% endblock %}

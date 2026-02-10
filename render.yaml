@@ -1,17 +1,22 @@
 services:
   - type: web
     name: new-resume-analyser
-    env: node
-    plan: free
-    buildCommand: npm install && npm run build
-    startCommand: npm run start
+    runtime: python
+    buildCommand: ./build.sh
+    startCommand: gunicorn app:app
     envVars:
+      - key: SECRET_KEY
+        generateValue: true
+      - key: PYTHON_VERSION
+        value: "3.11.11"
+      - key: NLTK_DATA
+        value: "/opt/render/project/src/nltk_data"
+      - key: ADMIN_TOKEN
+        generateValue: true
       - key: GEMINI_API_KEY
         sync: false
       - key: GEMINI_MODEL
         value: gemini-1.5-flash
-      - key: SKILL_WEIGHT
-        value: 0.8
       - key: FIREBASE_SERVICE_ACCOUNT_KEY
         sync: false
       - key: NEXT_PUBLIC_FIREBASE_API_KEY

@@ -1,0 +1,483 @@
+{% extends "base.html" %}
+{% block title %}LevelUpX Results — {{ results.ats_score }}% ATS Score{% endblock %}
+{% block content %}
+
+<!-- Compact Score Hero -->
+<section class="bg-gradient-to-br from-brand-700 via-brand-600 to-emerald-500 text-white">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 py-6">
+        <div class="flex items-center gap-6 md:gap-10">
+            <!-- ATS Score Ring — Primary -->
+            <div class="relative anim-scale flex-shrink-0">
+                <svg class="w-28 h-28 sm:w-32 sm:h-32 -rotate-90" viewBox="0 0 100 100">
+                    <circle cx="50" cy="50" r="45" fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="8"/>
+                    <circle cx="50" cy="50" r="45" fill="none"
+                        stroke="{% if results.ats_score >= 70 %}#4ade80{% elif results.ats_score >= 40 %}#facc15{% else %}#f87171{% endif %}"
+                        stroke-width="8" stroke-linecap="round"
+                        stroke-dasharray="283"
+                        stroke-dashoffset="{{ 283 - (283 * results.ats_score / 100) }}"
+                        class="anim-ring"/>
+                </svg>
+                <div class="absolute inset-0 flex flex-col items-center justify-center">
+                    <span class="text-3xl sm:text-4xl font-extrabold">{{ results.ats_score }}%</span>
+                    <span class="text-[10px] text-white/60 font-medium">ATS Score</span>
+                </div>
+            </div>
+            <!-- Info + Quick Match Dimensions -->
+            <div class="anim-fade-up-1 flex-1 min-w-0">
+                <h1 class="text-xl sm:text-2xl font-bold mb-3">Analysis Complete</h1>
+                <!-- Full Quick Match with symbols -->
+                {% if results.quick_match %}
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
+                    {% set dims = [('experience','Experience','briefcase'), ('education','Education','academic-cap'), ('skills','Skills','code'), ('location','Location','map-pin')] %}
+                    {% for key, label, icon in dims %}
+                    {% set dim = results.quick_match[key] %}
+                    <div class="bg-white/10 backdrop-blur-sm rounded-lg px-3 py-2">
+                        <div class="flex items-center gap-1.5 mb-1">
+                            <span class="text-[10px] text-white/50 font-semibold uppercase">{{ label }}</span>
+                            {% if 'Strong' in dim.match_quality %}
+                            <span class="text-green-300" title="Strong Match">✓✓</span>
+                            {% elif 'Good' in dim.match_quality %}
+                            <span class="text-green-300" title="Good Match">✓</span>
+                            {% elif 'Weak' in dim.match_quality %}
+                            <span class="text-amber-300" title="Weak Match">~</span>
+                            {% else %}
+                            <span class="text-red-300" title="Not a Match">✗</span>
+                            {% endif %}
+                        </div>
+                        <p class="text-xs font-semibold text-white/90 leading-tight truncate" title="{{ dim.cv_value }}">{{ dim.cv_value }}</p>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+                <!-- Sub-scores -->
+                <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+                    <span class="text-xs text-white/50 font-semibold uppercase">Text Similarity: {{ results.tfidf_score }}%</span>
+                    <span class="text-white/30">•</span>
+                    <span class="text-xs text-white/50 font-semibold uppercase">Skill Match: {{ results.skill_match.skill_score }}%</span>
+                    <span class="text-white/30">•</span>
+                    <span class="text-xs text-white/50 font-semibold uppercase">Verb Alignment: {{ results.experience_analysis.verb_alignment }}%</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<div class="max-w-7xl mx-auto px-4 sm:px-6 -mt-5 relative z-10 space-y-5 pb-4">
+
+    <!-- Recruiter Assessment -->
+    {% if results.llm_insights and results.llm_insights.profile_summary %}
+    <div class="bg-white rounded-2xl shadow-lg border border-slate-100 p-5 anim-fade-up">
+        <div class="flex items-center gap-2 mb-3">
+            <div class="w-8 h-8 bg-gradient-to-br from-emerald-100 to-brand-100 rounded-lg flex items-center justify-center">
+                <svg class="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+            </div>
+            <div>
+                <h3 class="font-semibold text-slate-800 text-sm">Recruiter Assessment</h3>
+                <p class="text-[10px] text-slate-400">AI-powered evaluation — what a hiring manager thinks about your profile</p>
+            </div>
+        </div>
+        <p class="text-sm text-slate-600 leading-relaxed">{{ results.llm_insights.profile_summary }}</p>
+    </div>
+    {% endif %}
+
+    <!-- Working Well / Needs Improvement Cards -->
+    {% if results.llm_insights and (results.llm_insights.working_well or results.llm_insights.needs_improvement) %}
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-5 anim-fade-up">
+        <!-- What's Working Well -->
+        {% if results.llm_insights.working_well %}
+        <div class="bg-white rounded-2xl shadow-lg border border-green-200 p-5">
+            <div class="flex items-center gap-2 mb-3">
+                <div class="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
+                    <svg class="w-4 h-4 text-green-600" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
+                </div>
+                <h3 class="font-semibold text-slate-800 text-sm">What's Working Well</h3>
+            </div>
+            <ul class="space-y-2">
+                {% for item in results.llm_insights.working_well %}
+                <li class="flex items-start gap-2">
+                    <svg class="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+                    <span class="text-sm text-slate-600 leading-relaxed">{{ item }}</span>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+
+        <!-- What Needs Improvement -->
+        {% if results.llm_insights.needs_improvement %}
+        <div class="bg-white rounded-2xl shadow-lg border border-red-200 p-5">
+            <div class="flex items-center gap-2 mb-3">
+                <div class="w-8 h-8 bg-red-100 rounded-lg flex items-center justify-center">
+                    <svg class="w-4 h-4 text-red-600" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/></svg>
+                </div>
+                <h3 class="font-semibold text-slate-800 text-sm">What Needs Improvement</h3>
+            </div>
+            <ul class="space-y-2">
+                {% for item in results.llm_insights.needs_improvement %}
+                <li class="flex items-start gap-2">
+                    <svg class="w-4 h-4 text-red-400 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/></svg>
+                    <span class="text-sm text-slate-600 leading-relaxed">{{ item }}</span>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <!-- How to Close the Gaps — Prominent Card -->
+    {% if results.llm_insights and results.llm_insights.skill_gap_tips %}
+    <div class="bg-gradient-to-br from-amber-50 to-orange-50 rounded-2xl shadow-lg border border-amber-200 p-5 anim-fade-up">
+        <div class="flex items-center gap-2 mb-4">
+            <div class="w-8 h-8 bg-amber-100 rounded-lg flex items-center justify-center">
+                <svg class="w-4 h-4 text-amber-600" fill="currentColor" viewBox="0 0 20 20"><path d="M11 3a1 1 0 10-2 0v1a1 1 0 102 0V3zM15.657 5.757a1 1 0 00-1.414-1.414l-.707.707a1 1 0 001.414 1.414l.707-.707zM18 10a1 1 0 01-1 1h-1a1 1 0 110-2h1a1 1 0 011 1zM5.05 6.464A1 1 0 106.464 5.05l-.707-.707a1 1 0 00-1.414 1.414l.707.707zM5 10a1 1 0 01-1 1H3a1 1 0 110-2h1a1 1 0 011 1zM8 16v-1h4v1a2 2 0 11-4 0zM12 14c.015-.34.208-.646.477-.859a4 4 0 10-4.954 0c.27.213.462.519.476.859h4.002z"/></svg>
+            </div>
+            <div>
+                <h3 class="font-semibold text-slate-800 text-sm">How to Close the Gaps</h3>
+                <p class="text-[10px] text-slate-500">Actionable tips to bridge your skill gaps for this role</p>
+            </div>
+        </div>
+        <div class="space-y-3">
+            {% for tip in results.llm_insights.skill_gap_tips.values() %}
+            <div class="flex items-start gap-3 bg-white/70 rounded-xl px-4 py-3 border border-amber-100">
+                <div class="w-5 h-5 bg-amber-200 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <span class="text-[10px] font-bold text-amber-700">{{ loop.index }}</span>
+                </div>
+                <p class="text-sm text-slate-700 leading-relaxed">{{ tip }}</p>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Top Skills Assessment (LLM-powered, Grouped) -->
+    {% if results.top_skill_groups %}
+    <div class="bg-white rounded-2xl shadow-lg border border-slate-100 p-5 anim-fade-up-2">
+        <div class="flex items-center gap-2 mb-1">
+            <svg class="w-5 h-5 text-brand-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"/></svg>
+            <h3 class="text-lg font-bold text-slate-800">Top Skills Assessment</h3>
+        </div>
+        <p class="text-xs text-slate-400 mb-4 ml-7">Key skill areas a recruiter screens for — grouped by category, matched against your CV</p>
+
+        {% set total_skills = results.top_skill_groups|sum(attribute='total') %}
+        {% set found_skills = results.top_skill_groups|sum(attribute='matched') %}
+        <div class="flex items-center gap-3 mb-4 bg-slate-50 rounded-xl px-4 py-3">
+            <div class="text-2xl font-extrabold {% if found_skills >= total_skills * 0.7 %}text-green-600{% elif found_skills >= total_skills * 0.4 %}text-amber-600{% else %}text-red-600{% endif %}">{{ found_skills }}/{{ total_skills }}</div>
+            <div>
+                <p class="text-sm font-semibold text-slate-700">Key Skills Matched</p>
+                <p class="text-xs text-slate-400">
+                    {% if found_skills >= total_skills * 0.7 %}Strong coverage — you'd likely pass the skills screen
+                    {% elif found_skills >= total_skills * 0.4 %}Moderate coverage — some critical gaps to address
+                    {% else %}Weak coverage — significant skills gap for this role{% endif %}
+                </p>
+            </div>
+        </div>
+
+        <div class="space-y-3">
+            {% for group in results.top_skill_groups %}
+            <div class="rounded-xl border {{ 'border-green-200 bg-green-50/50' if group.matched == group.total else ('border-amber-200 bg-amber-50/30' if group.matched > 0 else 'border-red-200 bg-red-50/50') }} p-3">
+                <div class="flex items-center justify-between mb-2">
+                    <div class="flex items-center gap-2">
+                        {% if group.matched == group.total %}
+                        <svg class="w-4 h-4 text-green-500" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
+                        {% elif group.matched > 0 %}
+                        <svg class="w-4 h-4 text-amber-500" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v3.586L7.707 9.293a1 1 0 00-1.414 1.414l3 3a1 1 0 001.414 0l3-3a1 1 0 00-1.414-1.414L11 10.586V7z" clip-rule="evenodd"/></svg>
+                        {% else %}
+                        <svg class="w-4 h-4 text-red-400" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/></svg>
+                        {% endif %}
+                        <span class="text-sm font-bold text-slate-800">{{ group.category }}</span>
+                        <span class="text-[10px] font-bold px-1.5 py-0.5 rounded-full {{ 'bg-red-100 text-red-600' if group.importance == 'Must-have' else 'bg-amber-100 text-amber-600' }}">{{ group.importance }}</span>
+                    </div>
+                    <span class="text-xs font-bold {{ 'text-green-600' if group.matched == group.total else ('text-amber-600' if group.matched > 0 else 'text-red-500') }}">{{ group.matched }}/{{ group.total }}</span>
+                </div>
+                <div class="flex flex-wrap gap-1.5 ml-6">
+                    {% for s in group.skills %}
+                    <span class="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-md {{ 'bg-green-100 text-green-700 border border-green-300' if s.found else 'bg-red-100 text-red-700 border border-red-300' }}">
+                        {% if s.found %}
+                        <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+                        {% else %}
+                        <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
+                        {% endif %}
+                        {{ s.skill }}
+                    </span>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Skills Grid — Matched Skills / Missing Skills / Bonus Skills -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-5 anim-fade-up-2">
+        <!-- Matched Skills -->
+        <div class="bg-white rounded-2xl shadow-lg border border-slate-100 p-5">
+            <div class="flex items-center gap-2 mb-3">
+                <div class="w-7 h-7 bg-green-100 rounded-lg flex items-center justify-center">
+                    <svg class="w-3.5 h-3.5 text-green-600" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+                </div>
+                <h3 class="font-semibold text-slate-800 text-sm">Matched Skills <span class="text-green-600">({{ results.skill_match.matched|length }})</span></h3>
+            </div>
+            {% if results.skill_match.matched_by_category %}
+            <div class="space-y-2.5">
+                {% for category, skills in results.skill_match.matched_by_category.items() %}
+                <div>
+                    <p class="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">{{ category.replace('_', ' ')|title }}</p>
+                    <div class="flex flex-wrap gap-1">
+                        {% for skill in skills %}
+                        <span class="bg-green-50 text-green-700 text-xs font-medium px-2 py-0.5 rounded-md border border-green-200">{{ skill }}</span>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}<p class="text-slate-400 text-xs">No matching skills detected.</p>{% endif %}
+        </div>
+
+        <!-- Missing Skills -->
+        <div class="bg-white rounded-2xl shadow-lg border border-slate-100 p-5">
+            <div class="flex items-center gap-2 mb-3">
+                <div class="w-7 h-7 bg-red-100 rounded-lg flex items-center justify-center">
+                    <svg class="w-3.5 h-3.5 text-red-600" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
+                </div>
+                <h3 class="font-semibold text-slate-800 text-sm">Missing Skills <span class="text-red-600">({{ results.skill_match.missing|length }})</span></h3>
+            </div>
+            {% if results.skill_match.missing_by_category %}
+            <div class="space-y-2.5">
+                {% for category, skills in results.skill_match.missing_by_category.items() %}
+                <div>
+                    <p class="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">{{ category.replace('_', ' ')|title }}</p>
+                    <div class="flex flex-wrap gap-1">
+                        {% for skill in skills %}
+                        <span class="bg-red-50 text-red-700 text-xs font-medium px-2 py-0.5 rounded-md border border-red-200">{{ skill }}</span>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}<p class="text-slate-400 text-xs">No gaps — you cover all JD skills!</p>{% endif %}
+        </div>
+
+        <!-- Additional Skills -->
+        <div class="bg-white rounded-2xl shadow-lg border border-slate-100 p-5">
+            <div class="flex items-center gap-2 mb-3">
+                <div class="w-7 h-7 bg-blue-100 rounded-lg flex items-center justify-center">
+                    <svg class="w-3.5 h-3.5 text-blue-600" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd"/></svg>
+                </div>
+                <h3 class="font-semibold text-slate-800 text-sm">Bonus Skills <span class="text-blue-600">({{ results.skill_match.extra|length }})</span></h3>
+            </div>
+            {% if results.skill_match.extra_by_category %}
+            <div class="space-y-2.5">
+                {% for category, skills in results.skill_match.extra_by_category.items() %}
+                <div>
+                    <p class="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">{{ category.replace('_', ' ')|title }}</p>
+                    <div class="flex flex-wrap gap-1">
+                        {% for skill in skills %}
+                        <span class="bg-blue-50 text-blue-700 text-xs font-medium px-2 py-0.5 rounded-md border border-blue-200">{{ skill }}</span>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}<p class="text-slate-400 text-xs">No extra skills detected.</p>{% endif %}
+        </div>
+    </div>
+
+    <!-- Skills Match by Category -->
+    {% if results.skill_match.category_breakdown %}
+    <div class="bg-white rounded-2xl shadow-lg border border-slate-100 p-5 anim-fade-up-3">
+        <h3 class="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+            <svg class="w-5 h-5 text-brand-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+            Skills Match by Category
+        </h3>
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {% for category, data in results.skill_match.category_breakdown.items() %}
+            <div class="bg-slate-50 rounded-xl p-4 hover:bg-slate-100 transition">
+                <div class="flex justify-between items-center mb-2">
+                    <span class="text-sm font-semibold text-slate-700">{{ category.replace('_', ' ')|title }}</span>
+                    <span class="text-sm font-bold {% if data.score >= 70 %}text-green-600{% elif data.score >= 40 %}text-amber-600{% else %}text-red-600{% endif %}">{{ data.score }}%</span>
+                </div>
+                <div class="w-full bg-slate-200 rounded-full h-2 mb-2">
+                    <div class="h-2 rounded-full anim-bar {% if data.score >= 70 %}bg-green-500{% elif data.score >= 40 %}bg-amber-500{% else %}bg-red-500{% endif %}" style="width:{{ data.score }}%"></div>
+                </div>
+                <div class="flex flex-wrap gap-1">
+                    {% for skill in data.matched %}<span class="text-xs text-green-700 bg-green-50 px-1.5 py-0.5 rounded">{{ skill }}</span>{% endfor %}
+                    {% for skill in data.missing %}<span class="text-xs text-red-500 bg-red-50 px-1.5 py-0.5 rounded line-through">{{ skill }}</span>{% endfor %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Experience Relevance -->
+    <div class="bg-white rounded-2xl shadow-lg border border-slate-100 p-5 anim-fade-up-4">
+        <h3 class="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+            <svg class="w-5 h-5 text-brand-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+            Experience Relevance
+        </h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+                <h4 class="text-sm font-semibold text-slate-600 mb-3">Action Verb Alignment: <span class="{% if results.experience_analysis.verb_alignment >= 50 %}text-green-600{% else %}text-amber-600{% endif %}">{{ results.experience_analysis.verb_alignment }}%</span></h4>
+                {% if results.experience_analysis.common_action_verbs %}
+                <p class="text-xs text-slate-500 mb-1.5 font-medium">Matching verbs:</p>
+                <div class="flex flex-wrap gap-1 mb-3">
+                    {% for verb in results.experience_analysis.common_action_verbs %}
+                    <span class="bg-green-50 text-green-700 text-xs px-2 py-0.5 rounded-md border border-green-200">{{ verb }}</span>
+                    {% endfor %}
+                </div>
+                {% endif %}
+                {% if results.experience_analysis.missing_action_verbs %}
+                <p class="text-xs text-slate-500 mb-1.5 font-medium">Consider using:</p>
+                <div class="flex flex-wrap gap-1">
+                    {% for verb in results.experience_analysis.missing_action_verbs %}
+                    <span class="bg-orange-50 text-orange-700 text-xs px-2 py-0.5 rounded-md border border-orange-200">{{ verb }}</span>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+            <div>
+                <h4 class="text-sm font-semibold text-slate-600 mb-3">CV Section Relevance</h4>
+                {% if results.experience_analysis.section_relevance %}
+                <div class="space-y-2.5">
+                    {% for section in results.experience_analysis.section_relevance %}
+                    <div>
+                        <div class="flex justify-between text-xs mb-1">
+                            <span class="text-slate-600 font-medium">{{ section.section }}</span>
+                            <span class="font-bold {% if section.relevance >= 40 %}text-green-600{% elif section.relevance >= 20 %}text-amber-600{% else %}text-red-500{% endif %}">{{ section.relevance }}%</span>
+                        </div>
+                        <div class="w-full bg-slate-200 rounded-full h-1.5">
+                            <div class="h-1.5 rounded-full anim-bar {% if section.relevance >= 40 %}bg-green-500{% elif section.relevance >= 20 %}bg-amber-500{% else %}bg-red-400{% endif %}" style="width:{{ section.relevance }}%"></div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}<p class="text-sm text-slate-400">Could not detect distinct sections in your CV.</p>{% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Keywords (Categorized) -->
+    <div class="bg-white rounded-2xl shadow-lg border border-slate-100 p-5">
+        <h3 class="text-lg font-bold text-slate-800 mb-1 flex items-center gap-2">
+            <svg class="w-5 h-5 text-brand-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/></svg>
+            Keyword Analysis
+        </h3>
+        <p class="text-xs text-slate-400 mb-4 ml-7">Key phrases grouped by type — matching JD keywords boosts ATS pass-through and recruiter relevance</p>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <!-- JD Keywords -->
+            <div>
+                <h4 class="text-xs font-bold text-emerald-600 uppercase tracking-wider mb-3">Job Description</h4>
+                {% if results.jd_keywords_categorized %}
+                <div class="space-y-3">
+                    {% for cat_name, keywords in results.jd_keywords_categorized.items() %}
+                    <div>
+                        <p class="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">{{ cat_name }}</p>
+                        <div class="flex flex-wrap gap-1">
+                            {% for kw in keywords %}
+                            <span class="bg-emerald-50 text-emerald-700 text-xs px-2 py-0.5 rounded-md border border-emerald-200" title="Score: {{ kw.score }}">{{ kw.phrase }}</span>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="flex flex-wrap gap-1.5">
+                    {% for kw in results.jd_keywords[:12] %}
+                    <span class="bg-emerald-50 text-emerald-700 text-xs px-2 py-0.5 rounded-md border border-emerald-200">{{ kw.phrase }}</span>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+            <!-- CV Keywords -->
+            <div>
+                <h4 class="text-xs font-bold text-brand-600 uppercase tracking-wider mb-3">Your CV</h4>
+                {% if results.cv_keywords_categorized %}
+                <div class="space-y-3">
+                    {% for cat_name, keywords in results.cv_keywords_categorized.items() %}
+                    <div>
+                        <p class="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">{{ cat_name }}</p>
+                        <div class="flex flex-wrap gap-1">
+                            {% for kw in keywords %}
+                            <span class="bg-brand-50 text-brand-700 text-xs px-2 py-0.5 rounded-md border border-brand-200" title="Score: {{ kw.score }}">{{ kw.phrase }}</span>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="flex flex-wrap gap-1.5">
+                    {% for kw in results.cv_keywords[:12] %}
+                    <span class="bg-brand-50 text-brand-700 text-xs px-2 py-0.5 rounded-md border border-brand-200">{{ kw.phrase }}</span>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Improvement Suggestions (Compact) -->
+    <div class="bg-white rounded-2xl shadow-lg border border-slate-100 p-5">
+        <h3 class="text-lg font-bold text-slate-800 mb-3 flex items-center gap-2">
+            <svg class="w-5 h-5 text-amber-500" fill="currentColor" viewBox="0 0 20 20"><path d="M11 3a1 1 0 10-2 0v1a1 1 0 102 0V3zM15.657 5.757a1 1 0 00-1.414-1.414l-.707.707a1 1 0 001.414 1.414l.707-.707zM18 10a1 1 0 01-1 1h-1a1 1 0 110-2h1a1 1 0 011 1zM5.05 6.464A1 1 0 106.464 5.05l-.707-.707a1 1 0 00-1.414 1.414l.707.707zM5 10a1 1 0 01-1 1H3a1 1 0 110-2h1a1 1 0 011 1zM8 16v-1h4v1a2 2 0 11-4 0zM12 14c.015-.34.208-.646.477-.859a4 4 0 10-4.954 0c.27.213.462.519.476.859h4.002z"/></svg>
+            {% if results.llm_insights and results.llm_insights.enhanced_suggestions %}
+            Recruiter Recommendations
+            {% else %}
+            Improvement Suggestions
+            {% endif %}
+        </h3>
+        {% if results.llm_insights and results.llm_insights.enhanced_suggestions %}
+        <p class="text-xs text-slate-400 mb-3 -mt-1">Prioritized by hiring impact — what matters most to get you to the next round</p>
+        {% endif %}
+        <div class="space-y-2">
+            {% for suggestion in results.suggestions %}
+            <details class="group rounded-xl border transition-all
+                {% if suggestion.priority == 'high' %}bg-gradient-to-r from-red-50 to-orange-50 border-red-200 hover:border-red-300
+                {% elif suggestion.priority == 'medium' %}bg-gradient-to-r from-amber-50 to-yellow-50 border-amber-200 hover:border-amber-300
+                {% else %}bg-slate-50 border-slate-200 hover:border-slate-300{% endif %}"
+                {% if loop.index <= 2 %}open{% endif %}>
+                <summary class="flex items-center gap-3 px-4 py-3 cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden">
+                    <span class="flex-shrink-0 w-5 h-5
+                        {% if suggestion.priority == 'high' %}bg-red-500
+                        {% elif suggestion.priority == 'medium' %}bg-amber-500
+                        {% else %}bg-slate-400{% endif %}
+                        text-white rounded-full flex items-center justify-center text-[10px] font-bold">{{ loop.index }}</span>
+                    <h4 class="font-semibold text-slate-800 text-sm flex-1">{{ suggestion.title }}</h4>
+                    <span class="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded
+                        {% if suggestion.priority == 'high' %}text-red-600 bg-red-100
+                        {% elif suggestion.priority == 'medium' %}text-amber-600 bg-amber-100
+                        {% else %}text-slate-500 bg-slate-200{% endif %}">{{ suggestion.priority }}</span>
+                    <svg class="w-4 h-4 text-slate-400 transition-transform group-open:rotate-180 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                </summary>
+                <div class="px-4 pb-3 pt-0">
+                    <p class="text-sm text-slate-600 leading-relaxed ml-8">{{ suggestion.body }}</p>
+                    {% if suggestion.examples %}
+                    <div class="mt-2 ml-8 space-y-1.5">
+                        {% for example in suggestion.examples %}
+                        <div class="flex items-start gap-2 bg-white/70 rounded-lg px-3 py-2 border border-slate-200/50">
+                            <svg class="w-3 h-3 text-brand-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"/></svg>
+                            <p class="text-xs text-slate-700 leading-relaxed">{{ example }}</p>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                </div>
+            </details>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="flex flex-wrap justify-center gap-4 py-3 no-print">
+        <a href="{{ url_for('index') }}" class="inline-flex items-center gap-2 bg-gradient-to-r from-brand-600 to-emerald-500 hover:from-brand-700 hover:to-emerald-600 text-white font-semibold py-2.5 px-7 rounded-xl shadow-lg transition-all text-sm">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+            Level Up Another CV
+        </a>
+        <button onclick="window.print()" class="inline-flex items-center gap-2 bg-white text-slate-700 font-semibold py-2.5 px-7 rounded-xl shadow-lg border border-slate-200 hover:bg-slate-50 transition-all text-sm">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
+            Print Results
+        </button>
+    </div>
+</div>
+
+{% endblock %}

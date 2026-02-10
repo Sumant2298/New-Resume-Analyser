@@ -177,6 +177,10 @@ def analyze_cv_against_jd(cv_text: str, jd_text: str) -> dict:
     # -------------------------------------------------------------------
     llm_bundle = generate_llm_bundle(cv_text, jd_text)
     category_match = llm_bundle.get('category_match', {}) if isinstance(llm_bundle, dict) else {}
+    if isinstance(llm_bundle, dict) and llm_bundle.get('_meta'):
+        results['llm_meta'] = llm_bundle['_meta']
+    else:
+        results['llm_meta'] = {'enabled': False, 'status': 'disabled'}
     if category_match and isinstance(category_match.get('key_categories'), list):
         key_categories = [c.strip() for c in category_match.get('key_categories', []) if isinstance(c, str)][:6]
         matched_categories = [c.strip() for c in category_match.get('matched_categories', []) if isinstance(c, str)]

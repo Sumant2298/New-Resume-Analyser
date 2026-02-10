@@ -25,6 +25,16 @@
             <!-- Info + Quick Match Dimensions -->
             <div class="anim-fade-up-1 flex-1 min-w-0">
                 <h1 class="text-xl sm:text-2xl font-bold mb-3">Analysis Complete</h1>
+                {% if results.llm_meta %}
+                <div class="mb-2">
+                    <span class="text-[10px] px-2 py-0.5 rounded-full bg-white/15 border border-white/20">
+                        LLM: {{ results.llm_meta.status|default('unknown') }} · {{ results.llm_meta.model|default('n/a') }}
+                    </span>
+                    {% if results.llm_meta.error %}
+                    <span class="text-[10px] text-white/70 ml-2">({{ results.llm_meta.error }})</span>
+                    {% endif %}
+                </div>
+                {% endif %}
                 <!-- Full Quick Match with symbols -->
                 {% if results.quick_match %}
                 <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">

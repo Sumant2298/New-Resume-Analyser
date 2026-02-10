@@ -148,6 +148,8 @@ def _call_gemini(system_prompt: str, user_prompt: str,
         "Content-Type": "application/json",
     }
     full_prompt = f"{system_prompt}\n\n{user_prompt}"
+    logger.info('Gemini request start (model=%s, timeout=%ss, prompt_chars=%s)',
+                GEMINI_MODEL, GEMINI_TIMEOUT, len(full_prompt))
 
     payload = {
         "contents": [
@@ -168,7 +170,9 @@ def _call_gemini(system_prompt: str, user_prompt: str,
 
     data = response.json()
     parts = data.get('candidates', [{}])[0].get('content', {}).get('parts', [])
-    return ''.join(part.get('text', '') for part in parts)
+    text = ''.join(part.get('text', '') for part in parts)
+    logger.info('Gemini response ok (chars=%s)', len(text))
+    return text
 
 
 # ---------------------------------------------------------------------------
@@ -276,6 +280,12 @@ def generate_llm_bundle(cv_text: str, jd_text: str) -> dict:
         logger.info('Gemini disabled (no GEMINI_API_KEY)')
         return {}
 
+    meta = {
+        'enabled': True,
+        'model': GEMINI_MODEL,
+        'status': 'pending',
+    }
+
     cv_truncated = cv_text[:3500]
     jd_truncated = jd_text[:2200]
 
@@ -309,12 +319,18 @@ Rules:
     try:
         raw = _call_gemini(SYSTEM_PROMPT, prompt, temperature=0.3, max_output_tokens=1200)
         parsed = _safe_json_parse(raw) or {}
-        if not isinstance(parsed, dict):
-            return {}
+        if not isinstance(parsed, dict) or not parsed:
+            meta['status'] = 'empty'
+            meta['error'] = 'No JSON parsed from Gemini response'
+            return {'_meta': meta}
+        meta['status'] = 'ok'
+        parsed['_meta'] = meta
         return parsed
     except Exception as exc:
         logger.warning('Gemini bundle failed: %s', exc)
-        return {}
+        meta['status'] = 'error'
+        meta['error'] = str(exc)[:200]
+        return {'_meta': meta}
 
 
 # ---------------------------------------------------------------------------

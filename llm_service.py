@@ -25,11 +25,9 @@ LLM_ENABLED = bool(GEMINI_API_KEY)
 _MODEL_CACHE = {"ts": 0.0, "models": []}
 _LAST_WORKING_MODEL = None
 _PREFERRED_MODELS = [
-    "gemini-1.5-flash",
     "gemini-2.0-flash",
-    "gemini-2.5-flash",
+    "gemini-1.5-flash",
     "gemini-1.0-pro",
-    "gemini-1.5-pro",
     "gemini-2.0-pro",
 ]
 
@@ -244,6 +242,26 @@ def _safe_json_parse(text: str):
                 return ast.literal_eval(py_like)
             except Exception:
                 return None
+
+
+def _split_items(text: str, max_items: int | None = None) -> list[str]:
+    if not text:
+        return []
+    cleaned = text.strip()
+    cleaned = re.sub(r'```(?:json)?', '', cleaned, flags=re.IGNORECASE).strip()
+    cleaned = re.sub(r'(?i)^(matched|missing|bonus)\\s*[:\\-]\\s*', '', cleaned)
+    parts = re.split(r'[\\n,;|]+', cleaned)
+    items: list[str] = []
+    for part in parts:
+        item = re.sub(r'^[\\s\\-\\d\\.)]+', '', part).strip()
+        if not item:
+            continue
+        if item.lower() in ('none', 'n/a', 'na'):
+            continue
+        items.append(item)
+        if max_items and len(items) >= max_items:
+            break
+    return items
 
 
 def _validate_scores_quickmatch(data: dict) -> bool:
@@ -595,7 +613,7 @@ Rules:
             temperature=0.2,
             max_output_tokens=800,
             response_mime_type="application/json",
-            min_output_chars=80,
+            min_output_chars=0,
         )
         parsed = _safe_json_parse(raw) or {}
         return parsed
@@ -639,7 +657,7 @@ Rules:
             temperature=0.2,
             max_output_tokens=700,
             response_mime_type="application/json",
-            min_output_chars=80,
+            min_output_chars=0,
         )
         data = _safe_json_parse(raw) or {}
         groups = data.get('skill_groups', [])
@@ -869,7 +887,7 @@ RESUME:
             temperature=0.1,
             max_output_tokens=600,
             response_mime_type="application/json",
-            min_output_chars=60,
+            min_output_chars=0,
         )
         parsed = _safe_json_parse(raw) or {}
         if not _validate_scores_quickmatch(parsed):
@@ -905,7 +923,7 @@ RESUME:
                 temperature=0.1,
                 max_output_tokens=450,
                 response_mime_type="application/json",
-                min_output_chars=40,
+                min_output_chars=0,
             )
             parsed_min = _safe_json_parse(raw_min) or {}
             if not isinstance(parsed_min, dict) or not parsed_min:
@@ -940,7 +958,7 @@ RESUME:
                 temperature=0.1,
                 max_output_tokens=200,
                 response_mime_type=None,
-                min_output_chars=10,
+                min_output_chars=0,
             )
             scores_only_parsed = _safe_json_parse(scores_only) or {}
             if isinstance(scores_only_parsed, dict):
@@ -974,7 +992,7 @@ RESUME:
                 temperature=0.1,
                 max_output_tokens=300,
                 response_mime_type=None,
-                min_output_chars=10,
+                min_output_chars=0,
             )
             qm_parsed = _safe_json_parse(quick_match_only) or {}
             if isinstance(qm_parsed, dict):
@@ -1030,11 +1048,109 @@ RESUME:
             temperature=0.2,
             max_output_tokens=600,
             response_mime_type="application/json",
-            min_output_chars=80,
+            min_output_chars=0,
         )
         parsed = _safe_json_parse(raw) or {}
         if not _validate_categories(parsed):
             parsed = _repair_json(raw, CATEGORIES_SCHEMA, max_output_tokens=500) or {}
+
+        if not _validate_categories(parsed):
+            # Fallback: get 6 categories as a simple list, then matched/missing
+            try:
+                cats_text = _call_gemini(
+                    SYSTEM_PROMPT,
+                    f"""Return EXACTLY 6 skill categories from this JD.
+Format: Category 1 | Category 2 | Category 3 | Category 4 | Category 5 | Category 6
+No other text.
+
+JOB DESCRIPTION:
+\"\"\"
+{jd_truncated}
+\"\"\"
+""",
+                    temperature=0.1,
+                    max_output_tokens=120,
+                    response_mime_type=None,
+                    min_output_chars=0,
+                )
+                key_categories = _split_items(cats_text, 6)
+                if len(key_categories) < 6:
+                    # Pad with generic categories to avoid empty UI
+                    pads = ["General Skills", "Domain Knowledge", "Tools", "Soft Skills", "Process", "Leadership"]
+                    for p in pads:
+                        if len(key_categories) >= 6:
+                            break
+                        if p not in key_categories:
+                            key_categories.append(p)
+
+                match_text = _call_gemini(
+                    SYSTEM_PROMPT,
+                    f"""Given these categories:
+{', '.join(key_categories)}
+
+Return ONLY:
+MATCHED: a | b | c
+MISSING: x | y | z
+
+Use only categories from the list.
+
+JOB DESCRIPTION:
+\"\"\"
+{jd_truncated}
+\"\"\"
+
+RESUME:
+\"\"\"
+{cv_truncated}
+\"\"\"
+""",
+                    temperature=0.1,
+                    max_output_tokens=120,
+                    response_mime_type=None,
+                    min_output_chars=0,
+                )
+                matched = []
+                missing = []
+                for line in match_text.splitlines():
+                    if line.upper().startswith("MATCHED"):
+                        matched = _split_items(line.split(":", 1)[-1], 6)
+                    if line.upper().startswith("MISSING"):
+                        missing = _split_items(line.split(":", 1)[-1], 6)
+
+                # If LLM failed, do a simple string fallback
+                if not matched and not missing:
+                    cv_lower = cv_text.lower()
+                    matched = [c for c in key_categories if c.lower() in cv_lower]
+                    missing = [c for c in key_categories if c not in matched]
+
+                bonus_text = _call_gemini(
+                    SYSTEM_PROMPT,
+                    f"""Return up to 3 BONUS categories (not in the list) relevant to the JD.
+Format: Bonus1 | Bonus2 | Bonus3
+If none, return NONE.
+
+Categories: {', '.join(key_categories)}
+
+JOB DESCRIPTION:
+\"\"\"
+{jd_truncated}
+\"\"\"
+""",
+                    temperature=0.2,
+                    max_output_tokens=80,
+                    response_mime_type=None,
+                    min_output_chars=0,
+                )
+                bonus = _split_items(bonus_text, 3)
+
+                parsed = {
+                    "key_categories": key_categories[:6],
+                    "matched_categories": matched,
+                    "missing_categories": missing,
+                    "bonus_categories": bonus,
+                }
+            except Exception:
+                parsed = {}
 
         if not _validate_categories(parsed):
             meta['status'] = 'empty'
@@ -1093,7 +1209,7 @@ RESUME:
             temperature=0.2,
             max_output_tokens=700,
             response_mime_type="application/json",
-            min_output_chars=80,
+            min_output_chars=0,
         )
         parsed = _safe_json_parse(raw) or {}
         if not _validate_skill_groups(parsed, key_categories):
@@ -1208,7 +1324,7 @@ RESUME:
             temperature=0.2,
             max_output_tokens=700,
             response_mime_type="application/json",
-            min_output_chars=80,
+            min_output_chars=0,
         )
         llm_data = _safe_json_parse(raw) or {}
         if not _validate_insights(llm_data):

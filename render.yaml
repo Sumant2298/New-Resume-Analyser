@@ -21,7 +21,7 @@ services:
       - key: GEMINI_TIMEOUT
         value: "45"
       - key: GEMINI_MIN_JSON_CHARS
-        value: "80"
+        value: "0"
       - key: LLM_ONLY
         value: "true"
       - key: FIRESTORE_ENABLED

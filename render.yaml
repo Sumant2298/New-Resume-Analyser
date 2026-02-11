@@ -28,6 +28,12 @@ services:
         value: "false"
       - key: FREE_CREDITS
         value: "3"
+      - key: INITIAL_CREDITS
+        value: "100"
+      - key: COST_ANALYZE
+        value: "2"
+      - key: COST_REWRITE
+        value: "5"
       - key: STRIPE_SECRET_KEY
         sync: false
       - key: STRIPE_PRICE_ID

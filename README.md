@@ -25,14 +25,10 @@ GEMINI_TIMEOUT=45
 LLM_ONLY=true
 ```
 
-### 2b) Credits + payments (Stripe)
-Optional: enable paid credits. Set these if you want to charge:
-```bash
-STRIPE_SECRET_KEY=sk_live_or_test_xxx
-STRIPE_PRICE_ID=price_xxx          # one-time price for a credit pack
-STRIPE_WEBHOOK_SECRET=whsec_xxx    # from Stripe webhook endpoint
-FREE_CREDITS=3                     # starter credits when user first signs in
-```
+### 2b) Credits
+- Starter credits: `INITIAL_CREDITS=100` (on first sign-in)
+- Costs: `COST_ANALYZE=2` credits per CV+JD analysis, `COST_REWRITE=5` credits per rewrite
+- You can adjust via env vars. Credits are stored in Firestore.
 
 ### 3) Firebase (Auth)
 - Create Firebase project (Spark/free)
@@ -62,7 +58,7 @@ FIRESTORE_ENABLED=true
 ```
 If you want to skip Firestore (no billing), leave it unset or set `false`.
 
-> Credits use Firestore. If `FIRESTORE_ENABLED` is false, analysis is unlimited and Stripe checkout is hidden.
+> Credits use Firestore. If `FIRESTORE_ENABLED` is false, analysis is unlimited and credits are ignored.
 
 ### 5) Run
 ```bash

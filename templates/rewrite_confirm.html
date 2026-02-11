@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}Rewrite Your CV — Confirm{% endblock %}
+
+{% block content %}
+<section class="max-w-4xl mx-auto px-4 sm:px-6 py-10">
+    <div class="bg-white rounded-2xl shadow-xl border border-amber-200 overflow-hidden">
+        <div class="bg-gradient-to-r from-orange-500 to-amber-500 text-white px-6 py-5">
+            <h1 class="text-xl sm:text-2xl font-bold">Rewrite Your CV for This Role</h1>
+            <p class="text-sm text-white/80 mt-1">AI-optimized rewriting tailored to the uploaded JD.</p>
+        </div>
+        <div class="p-6 space-y-6">
+            <div class="grid grid-cols-3 gap-4 text-center">
+                <div class="bg-slate-50 rounded-xl p-4">
+                    <p class="text-xs uppercase text-slate-500 font-semibold">ATS Score</p>
+                    <p class="text-2xl font-extrabold text-amber-600">{{ results.ats_score|default(0) }}%</p>
+                </div>
+                <div class="bg-slate-50 rounded-xl p-4">
+                    <p class="text-xs uppercase text-slate-500 font-semibold">Skills Matched</p>
+                    <p class="text-2xl font-extrabold text-emerald-600">{{ results.skill_match.matched|length if results.skill_match else 0 }}</p>
+                </div>
+                <div class="bg-slate-50 rounded-xl p-4">
+                    <p class="text-xs uppercase text-slate-500 font-semibold">Skills Missing</p>
+                    <p class="text-2xl font-extrabold text-red-500">{{ results.skill_match.missing|length if results.skill_match else 0 }}</p>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="bg-emerald-50 border border-emerald-200 rounded-xl p-4">
+                    <h3 class="font-semibold text-slate-800 mb-2">What the rewrite includes</h3>
+                    <ul class="space-y-2 text-sm text-slate-700">
+                        <li>✓ ATS-optimized wording with JD keywords woven in naturally</li>
+                        <li>✓ Stronger action verbs and quantified achievements</li>
+                        <li>✓ Change summary explaining every improvement</li>
+                        <li>✓ Downloadable text you can paste into your resume</li>
+                    </ul>
+                </div>
+                <div class="bg-slate-50 border border-slate-200 rounded-xl p-4">
+                    <h3 class="font-semibold text-slate-800 mb-2">Cost</h3>
+                    <div class="flex items-center gap-3 text-sm">
+                        <span class="px-3 py-2 rounded-lg bg-amber-100 text-amber-800 font-bold">{{ cost }} credits</span>
+                        <span class="text-slate-500">Your balance updates after sign-in.</span>
+                    </div>
+                </div>
+            </div>
+
+            <form action="{{ url_for('rewrite_run') }}" method="post" class="space-y-3">
+                <input type="hidden" name="id_token" class="id-token-field">
+                <input type="hidden" name="session_id" value="{{ session_id }}">
+                <div class="flex items-center justify-end gap-3">
+                    <a href="{{ url_for('index') }}" class="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 font-semibold">Cancel</a>
+                    <button type="submit" class="px-5 py-2.5 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 text-white font-semibold shadow hover:shadow-lg">
+                        Rewrite My CV ({{ cost }} credits)
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</section>
+
+<script>
+// inject id_token
+document.addEventListener('DOMContentLoaded', () => {
+    const token = localStorage.getItem('firebase_id_token') || '';
+    document.querySelectorAll('.id-token-field').forEach(el => el.value = token);
+});
+</script>
+{% endblock %}

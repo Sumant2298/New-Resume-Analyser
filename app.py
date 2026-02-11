@@ -5,6 +5,7 @@ import re
 import shutil
 import tempfile
 from datetime import datetime
+import uuid
 
 from dotenv import load_dotenv
 load_dotenv()  # Load .env file (Gemini + Firebase keys)
@@ -68,6 +69,11 @@ os.makedirs(CV_STORAGE, exist_ok=True)
 # Admin token for accessing stored CVs (set via env var on Render)
 ADMIN_TOKEN = os.environ.get('ADMIN_TOKEN', 'change-me-in-production')
 FREE_CREDITS = int(os.environ.get('FREE_CREDITS', '3'))
+COST_ANALYZE = int(os.environ.get('COST_ANALYZE', '2'))
+COST_REWRITE = int(os.environ.get('COST_REWRITE', '5'))
+
+# Default initial credits when user first signs in
+INITIAL_CREDITS = int(os.environ.get('INITIAL_CREDITS', '100'))
 
 STRIPE_SECRET_KEY = os.environ.get('STRIPE_SECRET_KEY')
 STRIPE_PRICE_ID = os.environ.get('STRIPE_PRICE_ID')
@@ -94,6 +100,33 @@ def allowed_file(filename: str) -> bool:
 
 
 # ---------------------------------------------------------------------------
+# Session payload storage for rewrite flow
+# ---------------------------------------------------------------------------
+
+SESSION_DIR = os.path.join(tempfile.gettempdir(), 'rewrite_sessions')
+os.makedirs(SESSION_DIR, exist_ok=True)
+
+
+def _save_session_payload(payload: dict) -> str:
+    sid = str(uuid.uuid4())
+    path = os.path.join(SESSION_DIR, f'{sid}.json')
+    with open(path, 'w', encoding='utf-8') as f:
+        json.dump(payload, f)
+    return sid
+
+
+def _load_session_payload(sid: str) -> dict | None:
+    path = os.path.join(SESSION_DIR, f'{sid}.json')
+    if not os.path.isfile(path):
+        return None
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception:
+        return None
+
+
+# ---------------------------------------------------------------------------
 # Credits helpers (Firestore)
 # ---------------------------------------------------------------------------
 
@@ -104,7 +137,7 @@ def _firestore_enabled_and_ready(firestore_db) -> bool:
 def _ensure_user_doc(firestore_db, user_id: str, email: str | None):
     doc_ref = firestore_db.collection('users').document(user_id)
     doc = doc_ref.get()
-    credits = FREE_CREDITS
+    credits = INITIAL_CREDITS
     if doc.exists:
         data = doc.to_dict() or {}
         credits = int(data.get('credits', credits))
@@ -491,7 +524,7 @@ def analyze():
 
     charged_credit = False
     if _firestore_enabled_and_ready(firestore_db):
-        charged_credit = _deduct_credit(firestore_db, user_id, user_email, amount=1)
+        charged_credit = _deduct_credit(firestore_db, user_id, user_email, amount=COST_ANALYZE)
         if not charged_credit:
             flash('You are out of credits. Buy more to run analysis.', 'error')
             return redirect(url_for('index'))
@@ -500,7 +533,7 @@ def analyze():
         results = analyze_cv_against_jd(cv_text, jd_text)
     except Exception as e:
         if charged_credit and _firestore_enabled_and_ready(firestore_db):
-            _add_credit(firestore_db, user_id, user_email, amount=1)
+            _add_credit(firestore_db, user_id, user_email, amount=COST_ANALYZE)
         flash(f'Analysis error: {e}', 'error')
         return redirect(url_for('index'))
 
@@ -526,18 +559,44 @@ def analyze():
     except Exception as e:
         logger.warning('Firestore write failed: %s', e)
 
-    return render_template('results.html', results=results)
+    session_id = _save_session_payload({
+        'cv_text': cv_text,
+        'jd_text': jd_text,
+        'results': results,
+        'user_id': user_id,
+        'created_at': datetime.utcnow().isoformat(),
+    })
+
+    return render_template('results.html', results=results, session_id=session_id, cost_rewrite=COST_REWRITE)
 
 
 # ---------------------------------------------------------------------------
-# CV rewrite (consumes 1 credit)
+# CV rewrite flow
 # ---------------------------------------------------------------------------
 
-@app.route('/rewrite', methods=['POST'])
-def rewrite():
+@app.route('/rewrite/start')
+def rewrite_start():
+    sid = request.args.get('sid', '')
+    payload = _load_session_payload(sid) if sid else None
+    if not payload:
+        flash('Session expired. Please run analysis again.', 'warning')
+        return redirect(url_for('index'))
+
+    results = payload.get('results', {})
+    quick = results.get('quick_match', {}) if isinstance(results, dict) else {}
+    return render_template('rewrite_confirm.html',
+                           session_id=sid,
+                           cost=COST_REWRITE,
+                           results=results,
+                           quick_match=quick)
+
+
+@app.route('/rewrite/run', methods=['POST'])
+def rewrite_run():
     id_token = request.form.get('id_token', '').strip()
-    if not id_token:
-        flash('Please sign in with Google to rewrite.', 'error')
+    sid = request.form.get('session_id', '').strip()
+    if not id_token or not sid:
+        flash('Missing token or session. Please sign in and try again.', 'error')
         return redirect(url_for('index'))
 
     try:
@@ -551,22 +610,21 @@ def rewrite():
     user_id = decoded.get('uid')
     user_email = decoded.get('email')
 
-    try:
-        cv_text = _process_input('cv_file', 'cv_text', url_field='cv_url',
-                                 save_cv=False, url_extractor=_extract_from_linkedin_url)
-        jd_text = _process_input('jd_file', 'jd_text', url_field='jd_url',
-                                 save_cv=False, url_extractor=_extract_from_jd_url)
-    except Exception as e:
-        flash(f'Error reading input: {e}', 'error')
+    payload = _load_session_payload(sid)
+    if not payload:
+        flash('Session expired. Please run analysis again.', 'warning')
         return redirect(url_for('index'))
 
+    cv_text = payload.get('cv_text', '')
+    jd_text = payload.get('jd_text', '')
+    results = payload.get('results', {})
     if not cv_text or not jd_text:
-        flash('Please provide both a CV and a Job Description.', 'error')
+        flash('Session missing CV or JD text. Please analyze again.', 'error')
         return redirect(url_for('index'))
 
     charged_credit = False
     if _firestore_enabled_and_ready(firestore_db):
-        charged_credit = _deduct_credit(firestore_db, user_id, user_email, amount=1)
+        charged_credit = _deduct_credit(firestore_db, user_id, user_email, amount=COST_REWRITE)
         if not charged_credit:
             flash('You are out of credits. Buy more to run rewrites.', 'error')
             return redirect(url_for('index'))
@@ -575,11 +633,11 @@ def rewrite():
         rewrites = rewrite_cv_bullets(cv_text, jd_text)
     except Exception as e:
         if charged_credit and _firestore_enabled_and_ready(firestore_db):
-            _add_credit(firestore_db, user_id, user_email, amount=1)
+            _add_credit(firestore_db, user_id, user_email, amount=COST_REWRITE)
         flash(f'Rewrite error: {e}', 'error')
         return redirect(url_for('index'))
 
-    return render_template('rewrite.html', rewrites=rewrites)
+    return render_template('rewrite.html', rewrites=rewrites, results=results, cost_rewrite=COST_REWRITE)
 
 
 # ---------------------------------------------------------------------------
@@ -692,6 +750,25 @@ def billing_cancel():
     flash('Payment cancelled.', 'warning')
     return redirect(url_for('index'))
 
+
+# ---------------------------------------------------------------------------
+# Account page
+# ---------------------------------------------------------------------------
+
+PLANS = [
+    {"name": "Starter", "price_inr": 199, "credits": 20, "rewrites": 4, "tag": None},
+    {"name": "Popular", "price_inr": 449, "credits": 50, "rewrites": 10, "tag": "Most Popular"},
+    {"name": "Pro Pack", "price_inr": 799, "credits": 100, "rewrites": 20, "tag": None},
+]
+
+
+@app.route('/account')
+def account():
+    return render_template('account.html',
+                           plans=PLANS,
+                           cost_rewrite=COST_REWRITE,
+                           cost_analyze=COST_ANALYZE,
+                           stripe_enabled=stripe_enabled)
 
 # ---------------------------------------------------------------------------
 # Admin endpoints — protected by ADMIN_TOKEN

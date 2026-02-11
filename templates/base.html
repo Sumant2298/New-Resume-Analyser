@@ -66,6 +66,9 @@
                 <span id="authStatus" class="hidden text-white/70">
                     Signed in as <span id="userEmail" class="font-semibold text-white/90"></span>
                 </span>
+                <a href="{{ url_for('account') }}" class="hidden sm:inline-flex items-center gap-1 text-xs bg-white/15 hover:bg-white/25 backdrop-blur-sm px-3 py-1.5 rounded-lg transition font-semibold">
+                    Account
+                </a>
                 {% if stripe_enabled %}
                 <button id="buyCreditsBtn" class="hidden text-xs bg-amber-100/90 text-amber-800 hover:bg-amber-50 px-3 py-1.5 rounded-lg transition font-semibold">
                     Buy credits

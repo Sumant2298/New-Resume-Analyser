@@ -1,33 +1,68 @@
 {% extends "base.html" %}
-{% block title %}Rewrite Suggestions{% endblock %}
+{% block title %}CV Rewrite Complete{% endblock %}
 
 {% block content %}
-<section class="max-w-5xl mx-auto px-4 sm:px-6 py-10">
-    <div class="bg-white border border-slate-200 rounded-2xl shadow-lg p-6 sm:p-8">
-        <div class="flex items-center justify-between mb-6">
-            <div>
-                <p class="text-xs uppercase tracking-[0.2em] text-slate-400 font-semibold">CV Rewrite</p>
-                <h1 class="text-2xl font-bold text-slate-800 mt-1">Recruiter-ready phrasing</h1>
+<section class="bg-gradient-to-r from-orange-500 to-amber-500 text-white">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 py-6 flex items-center justify-between">
+        <div>
+            <p class="text-xs uppercase tracking-[0.2em] text-white/80 font-semibold">CV Rewrite Complete</p>
+            <h1 class="text-2xl font-bold">Your CV has been optimized for this role</h1>
+        </div>
+        <div class="flex items-center gap-3">
+            {% if results %}
+            <div class="bg-white/15 px-3 py-2 rounded-lg text-sm font-semibold">
+                Original ATS: {{ results.ats_score|default(0) }}%
+            </div>
+            {% endif %}
+            <div class="bg-emerald-100 text-emerald-800 px-3 py-2 rounded-lg text-sm font-bold">
+                Credits used: {{ cost_rewrite|default(5) }}
             </div>
         </div>
-
-        {% if rewrites and rewrites.rewritten_bullets %}
-        <div class="space-y-4">
-            {% for bullet in rewrites.rewritten_bullets %}
-            <div class="p-4 bg-emerald-50 border border-emerald-100 rounded-xl text-sm text-slate-800">
-                {{ bullet }}
-            </div>
-            {% endfor %}
-        </div>
-        {% else %}
-        <p class="text-slate-500 text-sm">No rewrite suggestions were generated. Please try again.</p>
-        {% endif %}
-
-        {% if rewrites.summary %}
-        <div class="mt-6 p-4 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-700">
-            <span class="font-semibold text-slate-800">Summary:</span> {{ rewrites.summary }}
-        </div>
-        {% endif %}
     </div>
 </section>
+
+<section class="max-w-6xl mx-auto px-4 sm:px-6 py-8 space-y-6">
+    <div class="bg-white rounded-2xl shadow-lg border border-emerald-100 p-6">
+        <h2 class="text-lg font-bold text-slate-800 mb-3">What Changed</h2>
+        {% if rewrites and rewrites.changes %}
+        <ul class="space-y-2 text-sm text-slate-700">
+            {% for item in rewrites.changes %}
+            <li class="flex items-start gap-2">
+                <svg class="w-4 h-4 text-emerald-500 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
+                <span>{{ item }}</span>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="text-slate-500 text-sm">Your CV has been rewritten with stronger verbs and JD keywords.</p>
+        {% endif %}
+    </div>
+
+    <div class="bg-white rounded-2xl shadow-lg border border-slate-100 p-6">
+        <div class="flex items-center justify-between mb-3">
+            <h2 class="text-lg font-bold text-slate-800">Your Optimized CV</h2>
+            <button onclick="copyOptimized()" class="text-xs px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50">
+                Copy Text
+            </button>
+        </div>
+        <div id="optimizedCv" class="whitespace-pre-wrap text-sm text-slate-700 leading-6 bg-slate-50 border border-slate-200 rounded-xl p-4">
+            {% if rewrites and rewrites.optimized_cv %}
+            {{ rewrites.optimized_cv }}
+            {% else %}
+            {{ rewrites.rewritten_bullets | join('\n') if rewrites and rewrites.rewritten_bullets else 'Optimized CV content not available.' }}
+            {% endif %}
+        </div>
+    </div>
+</section>
+
+<script>
+function copyOptimized() {
+    const el = document.getElementById('optimizedCv');
+    if (!el) return;
+    const text = el.innerText;
+    navigator.clipboard.writeText(text).then(() => {
+        alert('Copied optimized CV to clipboard');
+    });
+}
+</script>
 {% endblock %}

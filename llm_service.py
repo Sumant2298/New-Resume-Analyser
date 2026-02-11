@@ -217,6 +217,8 @@ INSIGHTS_SCHEMA = """{
 
 REWRITE_SCHEMA = """{
   "rewritten_bullets": ["Bullet 1", "Bullet 2"],
+  "changes": ["Change summary 1", "Change summary 2"],
+  "optimized_cv": "Full rewritten CV text",
   "summary": "One-sentence recruiter-friendly summary"
 }"""
 
@@ -1280,11 +1282,19 @@ Return ONLY JSON:
         data = _safe_json_parse(raw) or {}
         bullets = data.get("rewritten_bullets") if isinstance(data, dict) else []
         summary = data.get("summary") if isinstance(data, dict) else ""
+        changes = data.get("changes") if isinstance(data, dict) else []
+        optimized = data.get("optimized_cv") if isinstance(data, dict) else ""
         if isinstance(bullets, list):
             bullets = [b for b in bullets if isinstance(b, str) and b.strip()]
         else:
             bullets = []
-        return {"rewritten_bullets": bullets, "summary": summary}
+        if isinstance(changes, list):
+            changes = [c for c in changes if isinstance(c, str) and c.strip()]
+        else:
+            changes = []
+        if not isinstance(optimized, str):
+            optimized = ""
+        return {"rewritten_bullets": bullets, "summary": summary, "changes": changes, "optimized_cv": optimized}
     except Exception as exc:
         logger.warning("Gemini rewrite failed: %s", exc)
         return {}

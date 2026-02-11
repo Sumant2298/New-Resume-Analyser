@@ -195,19 +195,20 @@
                 alert('Please sign in first.');
                 return;
             }
-            const res = await fetch('/api/checkout', {
+            const res = await fetch('/api/credits/topup', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify({ quantity: 1 })
+                }
             });
             const data = await res.json();
-            if (data.url) {
-                window.location.href = data.url;
+            if (data.credits) {
+                alert('Purchase successful! Added credits.');
+                creditsBadge.textContent = `${data.credits} credits`;
+                creditsBadge.classList.remove('hidden');
             } else {
-                alert('Unable to start checkout right now.');
+                alert('Unable to add credits right now.');
             }
         });
 

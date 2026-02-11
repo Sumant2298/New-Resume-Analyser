@@ -84,6 +84,8 @@ stripe_enabled = bool(STRIPE_SECRET_KEY and STRIPE_PRICE_ID)
 if STRIPE_SECRET_KEY:
     stripe.api_key = STRIPE_SECRET_KEY
 
+MOCK_TOPUP_CREDITS = int(os.environ.get('MOCK_TOPUP_CREDITS', '50'))
+
 ALLOWED_EXTENSIONS = {'pdf', 'docx', 'txt'}
 
 BROWSER_HEADERS = {
@@ -174,6 +176,11 @@ def _bearer_token() -> str:
     if auth_header.lower().startswith('bearer '):
         return auth_header[7:].strip()
     return ''
+
+
+def _estimate_tokens_from_text(*parts: str) -> int:
+    chars = sum(len(p) for p in parts if isinstance(p, str))
+    return int(chars / 4)  # rough heuristic
 
 
 # ---------------------------------------------------------------------------
@@ -565,6 +572,7 @@ def analyze():
         'results': results,
         'user_id': user_id,
         'created_at': datetime.utcnow().isoformat(),
+        'token_usage_est': _estimate_tokens_from_text(cv_text, jd_text),
     })
 
     return render_template('results.html', results=results, session_id=session_id, cost_rewrite=COST_REWRITE)
@@ -637,7 +645,15 @@ def rewrite_run():
         flash(f'Rewrite error: {e}', 'error')
         return redirect(url_for('index'))
 
-    return render_template('rewrite.html', rewrites=rewrites, results=results, cost_rewrite=COST_REWRITE)
+    rewrite_session = _save_session_payload({
+        'rewrites': rewrites,
+        'results': results,
+        'created_at': datetime.utcnow().isoformat(),
+        'token_usage_est': _estimate_tokens_from_text(rewrites.get('optimized_cv', ''), rewrites.get('summary', '')),
+        'download_name': f"rewritten_cv_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.pdf",
+    })
+
+    return render_template('rewrite.html', rewrites=rewrites, results=results, cost_rewrite=COST_REWRITE, rewrite_session=rewrite_session)
 
 
 # ---------------------------------------------------------------------------
@@ -660,6 +676,25 @@ def api_credits():
 
     _, credits = _ensure_user_doc(firestore_db, decoded.get('uid'), decoded.get('email'))
     return jsonify({'credits': credits})
+
+
+@app.route('/api/credits/topup', methods=['POST'])
+def api_credits_topup():
+    token = _bearer_token()
+    if not token:
+        return jsonify({'error': 'missing token'}), 401
+    try:
+        auth_client, firestore_db = get_firebase()
+        decoded = auth_client.verify_id_token(token)
+    except Exception:
+        return jsonify({'error': 'invalid token'}), 401
+
+    if not _firestore_enabled_and_ready(firestore_db):
+        return jsonify({'error': 'credits disabled'}), 400
+
+    _add_credit(firestore_db, decoded.get('uid'), decoded.get('email'), amount=MOCK_TOPUP_CREDITS)
+    _, credits = _ensure_user_doc(firestore_db, decoded.get('uid'), decoded.get('email'))
+    return jsonify({'credits': credits, 'added': MOCK_TOPUP_CREDITS, 'status': 'mock_success'})
 
 
 # ---------------------------------------------------------------------------
@@ -749,6 +784,22 @@ def billing_success():
 def billing_cancel():
     flash('Payment cancelled.', 'warning')
     return redirect(url_for('index'))
+
+
+@app.route('/rewrite/pdf')
+def rewrite_pdf():
+    sid = request.args.get('sid', '')
+    payload = _load_session_payload(sid) if sid else None
+    if not payload:
+        return 'Not found', 404
+    rewrites = payload.get('rewrites') or {}
+    content = rewrites.get('optimized_cv') or '\n'.join(rewrites.get('rewritten_bullets', []))
+    if not content:
+        return 'No content', 400
+    filename = payload.get('download_name', 'rewritten_cv.pdf')
+    temp_path = os.path.join(tempfile.gettempdir(), filename)
+    _text_to_pdf(content, temp_path)
+    return send_file(temp_path, as_attachment=True, download_name=filename)
 
 
 # ---------------------------------------------------------------------------

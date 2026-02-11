@@ -26,13 +26,40 @@
             <p class="text-3xl font-extrabold text-slate-900 mt-2">₹{{ plan.price_inr }}</p>
             <p class="text-xs text-slate-500 mt-1">{{ plan.credits }} credits · {{ plan.rewrites }} rewrites</p>
             <p class="text-xs text-slate-400 mt-1">{{ '%.0f' % ((plan.price_inr / plan.credits) * 100) }} paise/credit</p>
-            <button class="mt-4 w-full px-4 py-2 rounded-xl bg-slate-200 text-slate-500 font-semibold cursor-not-allowed">Coming Soon</button>
+            <button class="mt-4 w-full px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-brand-500 text-white font-semibold hover:shadow"
+                    onclick="mockTopup()">
+                Get Credits (mock)
+            </button>
         </div>
         {% endfor %}
     </div>
 </section>
 
 <script>
+async function mockTopup() {
+    const token = localStorage.getItem('firebase_id_token');
+    if (!token) {
+        alert('Please sign in first.');
+        return;
+    }
+    const res = await fetch('/api/credits/topup', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+    });
+    const data = await res.json();
+    if (data.credits) {
+        alert('Credits added! New balance: ' + data.credits);
+        const pill = document.getElementById('creditsPill');
+        const count = document.getElementById('creditsCount');
+        if (pill && count) {
+            count.textContent = data.credits;
+            pill.classList.remove('hidden');
+        }
+    } else {
+        alert('Unable to add credits right now.');
+    }
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
     const token = localStorage.getItem('firebase_id_token');
     if (!token) return;

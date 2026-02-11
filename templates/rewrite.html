@@ -41,9 +41,16 @@
     <div class="bg-white rounded-2xl shadow-lg border border-slate-100 p-6">
         <div class="flex items-center justify-between mb-3">
             <h2 class="text-lg font-bold text-slate-800">Your Optimized CV</h2>
-            <button onclick="copyOptimized()" class="text-xs px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50">
-                Copy Text
-            </button>
+            <div class="flex items-center gap-2">
+                <button onclick="copyOptimized()" class="text-xs px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50">
+                    Copy Text
+                </button>
+                {% if rewrite_session %}
+                <a href="{{ url_for('rewrite_pdf') }}?sid={{ rewrite_session }}" class="text-xs px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50">
+                    Download PDF
+                </a>
+                {% endif %}
+            </div>
         </div>
         <div id="optimizedCv" class="whitespace-pre-wrap text-sm text-slate-700 leading-6 bg-slate-50 border border-slate-200 rounded-xl p-4">
             {% if rewrites and rewrites.optimized_cv %}

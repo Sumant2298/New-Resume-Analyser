@@ -25,6 +25,8 @@
     <style>
         .diff-add { background: #e6ffed; color: #065f46; }
         .diff-del { background: #fee2e2; color: #b91c1c; text-decoration: line-through; }
+        .diff-mode-toggle button { border: 1px solid #e2e8f0; }
+        .diff-mode-toggle .active { background: #0ea5e9; color: white; border-color: #0ea5e9; }
     </style>
 
     <div class="bg-white rounded-2xl shadow-lg border border-emerald-100 p-6">
@@ -93,23 +95,43 @@
     </div>
 
     <!-- Diff view -->
+    <div class="flex items-center gap-2 mb-2 diff-mode-toggle">
+        <button id="btnWord" class="text-xs px-3 py-1.5 rounded-lg active">Word diff</button>
+        <button id="btnLine" class="text-xs px-3 py-1.5 rounded-lg">Line diff</button>
+    </div>
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div class="bg-white rounded-2xl shadow-lg border border-slate-200 p-4">
             <div class="flex items-center justify-between mb-2">
                 <h3 class="text-sm font-bold text-slate-800">Original (highlighted)</h3>
             </div>
-            <div class="text-sm leading-6 text-slate-700 bg-slate-50 border border-slate-200 rounded-xl p-3 h-full diff-block">
+            <div id="diffOldWord" class="text-sm leading-6 text-slate-700 bg-slate-50 border border-slate-200 rounded-xl p-3 h-full diff-block">
                 {{ diff_old|safe }}
+            </div>
+            <div id="diffOldLine" class="hidden text-sm leading-6 text-slate-700 bg-slate-50 border border-slate-200 rounded-xl p-3 h-full diff-block">
+                {{ line_diff_old|safe }}
             </div>
         </div>
         <div class="bg-white rounded-2xl shadow-lg border border-slate-200 p-4">
             <div class="flex items-center justify-between mb-2">
                 <h3 class="text-sm font-bold text-slate-800">Optimized (highlighted)</h3>
             </div>
-            <div class="text-sm leading-6 text-slate-700 bg-slate-50 border border-slate-200 rounded-xl p-3 h-full diff-block">
+            <div id="diffNewWord" class="text-sm leading-6 text-slate-700 bg-slate-50 border border-slate-200 rounded-xl p-3 h-full diff-block">
                 {{ diff_new|safe }}
             </div>
+            <div id="diffNewLine" class="hidden text-sm leading-6 text-slate-700 bg-slate-50 border border-slate-200 rounded-xl p-3 h-full diff-block">
+                {{ line_diff_new|safe }}
+            </div>
         </div>
+    </div>
+
+    <!-- Snippet rewrite helper -->
+    <div class="bg-white rounded-2xl shadow-lg border border-slate-200 p-4">
+        <div class="flex items-center justify-between mb-3">
+            <h3 class="text-sm font-bold text-slate-800">Rewrite a selected paragraph</h3>
+            <button onclick="rewriteSelection()" class="text-xs px-3 py-1.5 rounded-lg bg-emerald-500 text-white hover:bg-emerald-600">Rewrite selection</button>
+        </div>
+        <p class="text-xs text-slate-500 mb-2">Select any text in Original or Optimized columns above, then click “Rewrite selection”.</p>
+        <textarea id="snippetOutput" rows="4" class="w-full border border-slate-200 rounded-lg p-3 text-sm bg-slate-50" placeholder="Rewritten snippet will appear here"></textarea>
     </div>
 </section>
 
@@ -129,6 +151,50 @@ function copyColumn(id) {
     navigator.clipboard.writeText(el.innerText).then(() => {
         alert('Copied text');
     });
+}
+
+// Toggle diff mode
+const btnWord = document.getElementById('btnWord');
+const btnLine = document.getElementById('btnLine');
+function setMode(mode) {
+    const isLine = mode === 'line';
+    document.getElementById('diffOldWord').classList.toggle('hidden', isLine);
+    document.getElementById('diffNewWord').classList.toggle('hidden', isLine);
+    document.getElementById('diffOldLine').classList.toggle('hidden', !isLine);
+    document.getElementById('diffNewLine').classList.toggle('hidden', !isLine);
+    btnWord.classList.toggle('active', !isLine);
+    btnLine.classList.toggle('active', isLine);
+}
+btnWord?.addEventListener('click', () => setMode('word'));
+btnLine?.addEventListener('click', () => setMode('line'));
+
+async function rewriteSelection() {
+    const selection = window.getSelection();
+    const text = selection ? selection.toString().trim() : '';
+    if (!text) {
+        alert('Select some text first in the comparison blocks.');
+        return;
+    }
+    const token = localStorage.getItem('firebase_id_token');
+    if (!token) {
+        alert('Please sign in again.');
+        return;
+    }
+    const sessionId = "{{ rewrite_session }}";
+    const res = await fetch('/api/rewrite_snippet', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ text, session_id: sessionId })
+    });
+    const data = await res.json();
+    if (data.rewritten) {
+        document.getElementById('snippetOutput').value = data.rewritten;
+    } else {
+        alert('Could not rewrite this snippet right now.');
+    }
 }
 </script>
 {% endblock %}

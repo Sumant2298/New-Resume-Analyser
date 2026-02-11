@@ -1300,6 +1300,38 @@ Return ONLY JSON:
         return {}
 
 
+def rewrite_snippet(text: str, jd_text: str, tone: str = "concise") -> str:
+    """Lightweight rewrite of a selected paragraph/snippet."""
+    if not LLM_ENABLED or not text.strip():
+        return ''
+    prompt = f"""Rewrite the snippet to better match the job description. Keep it truthful, concise, and ATS-friendly.
+Tone: {tone}. Return only the rewritten text.
+
+JOB DESCRIPTION (context):
+\"\"\"
+{jd_text[:1200]}
+\"\"\"
+
+SNIPPET:
+\"\"\"
+{text[:800]}
+\"\"\"
+"""
+    try:
+        raw = _call_gemini(
+            SYSTEM_PROMPT,
+            prompt,
+            temperature=0.2,
+            max_output_tokens=200,
+            response_mime_type=None,
+            min_output_chars=20,
+        )
+        return raw.strip()
+    except Exception as exc:
+        logger.warning("Gemini snippet rewrite failed: %s", exc)
+        return ''
+
+
 def merge_suggestions(base_suggestions: list, llm_suggestions: list):
     if not llm_suggestions:
         return

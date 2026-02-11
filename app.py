@@ -232,6 +232,27 @@ def _diff_words_html(old: str, new: str) -> tuple[Markup, Markup]:
     return Markup(''.join(old_parts)), Markup(''.join(new_parts))
 
 
+def _diff_lines_html(old: str, new: str) -> tuple[Markup, Markup]:
+    """Return line-level diff HTML for old/new text."""
+    a = (old or '').splitlines(keepends=True)
+    b = (new or '').splitlines(keepends=True)
+    sm = difflib.SequenceMatcher(a=a, b=b)
+    old_parts: list[str] = []
+    new_parts: list[str] = []
+    for tag, i1, i2, j1, j2 in sm.get_opcodes():
+        if tag == 'equal':
+            old_parts.extend(escape(line) for line in a[i1:i2])
+            new_parts.extend(escape(line) for line in b[j1:j2])
+        elif tag == 'replace':
+            old_parts.extend(f'<div class="diff-del">{escape(line)}</div>' for line in a[i1:i2])
+            new_parts.extend(f'<div class="diff-add">{escape(line)}</div>' for line in b[j1:j2])
+        elif tag == 'delete':
+            old_parts.extend(f'<div class="diff-del">{escape(line)}</div>' for line in a[i1:i2])
+        elif tag == 'insert':
+            new_parts.extend(f'<div class="diff-add">{escape(line)}</div>' for line in b[j1:j2])
+    return Markup(''.join(old_parts)), Markup(''.join(new_parts))
+
+
 # ---------------------------------------------------------------------------
 # File extraction helpers
 # ---------------------------------------------------------------------------
@@ -697,6 +718,7 @@ def rewrite_run():
     old_cv_text = cv_text
     new_cv_text = rewrites.get('optimized_cv') or '\n'.join(rewrites.get('rewritten_bullets', []))
     diff_old, diff_new = _diff_words_html(old_cv_text, new_cv_text)
+    line_diff_old, line_diff_new = _diff_lines_html(old_cv_text, new_cv_text)
 
     rewrite_session = _save_session_payload({
         'rewrites': rewrites,
@@ -707,6 +729,9 @@ def rewrite_run():
         'original_cv': cv_text,
         'diff_old': str(diff_old),
         'diff_new': str(diff_new),
+        'line_diff_old': str(line_diff_old),
+        'line_diff_new': str(line_diff_new),
+        'jd_text': jd_text,
     })
 
     return render_template('rewrite.html',
@@ -716,7 +741,9 @@ def rewrite_run():
                            rewrite_session=rewrite_session,
                            original_cv=cv_text,
                            diff_old=diff_old,
-                           diff_new=diff_new)
+                           diff_new=diff_new,
+                           line_diff_old=line_diff_old,
+                           line_diff_new=line_diff_new)
 
 
 # ---------------------------------------------------------------------------
@@ -883,6 +910,34 @@ def account():
                            cost_rewrite=COST_REWRITE,
                            cost_analyze=COST_ANALYZE,
                            stripe_enabled=stripe_enabled)
+
+
+# ---------------------------------------------------------------------------
+# Snippet rewrite API (for selected paragraph)
+# ---------------------------------------------------------------------------
+
+@app.route('/api/rewrite_snippet', methods=['POST'])
+def api_rewrite_snippet():
+    token = _bearer_token()
+    if not token:
+        return jsonify({'error': 'missing token'}), 401
+    try:
+        auth_client, firestore_db = get_firebase()
+        decoded = auth_client.verify_id_token(token)
+    except Exception:
+        return jsonify({'error': 'invalid token'}), 401
+
+    body = request.get_json(silent=True) or {}
+    sid = body.get('session_id', '')
+    text = body.get('text', '')
+    if not text:
+        return jsonify({'error': 'missing text'}), 400
+    payload = _load_session_payload(sid) if sid else None
+    jd_text = (payload or {}).get('jd_text', '')
+    rewritten = rewrite_snippet(text, jd_text)
+    if not rewritten:
+        return jsonify({'error': 'rewrite_failed'}), 500
+    return jsonify({'rewritten': rewritten})
 
 
 # ---------------------------------------------------------------------------

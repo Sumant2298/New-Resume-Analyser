@@ -128,6 +128,26 @@ def _load_session_payload(sid: str) -> dict | None:
         return None
 
 
+def _load_all_sessions(limit: int = 200) -> list[dict]:
+    sessions = []
+    try:
+        files = sorted(os.listdir(SESSION_DIR), reverse=True)
+    except FileNotFoundError:
+        return sessions
+    for fname in files[:limit]:
+        if not fname.endswith('.json'):
+            continue
+        path = os.path.join(SESSION_DIR, fname)
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                data['_sid'] = fname[:-5]
+                sessions.append(data)
+        except Exception:
+            continue
+    return sessions
+
+
 # ---------------------------------------------------------------------------
 # Credits helpers (Firestore)
 # ---------------------------------------------------------------------------
@@ -820,6 +840,43 @@ def account():
                            cost_rewrite=COST_REWRITE,
                            cost_analyze=COST_ANALYZE,
                            stripe_enabled=stripe_enabled)
+
+
+# ---------------------------------------------------------------------------
+# Admin dashboard (token/credits overview)
+# ---------------------------------------------------------------------------
+
+@app.route('/admin/dashboard')
+def admin_dashboard():
+    token = request.args.get('token', '')
+    if token != ADMIN_TOKEN:
+        return 'Unauthorized', 401
+
+    sessions = _load_all_sessions(limit=300)
+    analyses = [s for s in sessions if 'results' in s]
+    rewrites = [s for s in sessions if 'rewrites' in s]
+    total_tokens = sum(int(s.get('token_usage_est', 0) or 0) for s in sessions)
+    total_ats = [s.get('results', {}).get('ats_score', 0) for s in analyses if isinstance(s.get('results'), dict)]
+    avg_ats = round(sum(total_ats) / len(total_ats), 1) if total_ats else 0
+
+    # Recent entries for table
+    recent = []
+    for s in sessions[:50]:
+        kind = 'rewrite' if 'rewrites' in s else 'analysis'
+        ts = s.get('created_at', '')[:19]
+        tok = s.get('token_usage_est', 0)
+        ats = s.get('results', {}).get('ats_score') if isinstance(s.get('results'), dict) else None
+        recent.append({'sid': s.get('_sid'), 'kind': kind, 'created_at': ts, 'tokens': tok, 'ats': ats})
+
+    return render_template('admin_dashboard.html',
+                           stats={
+                               'sessions': len(sessions),
+                               'analyses': len(analyses),
+                               'rewrites': len(rewrites),
+                               'tokens': total_tokens,
+                               'avg_ats': avg_ats,
+                           },
+                           recent=recent)
 
 # ---------------------------------------------------------------------------
 # Admin endpoints — protected by ADMIN_TOKEN

@@ -4,8 +4,9 @@ import os
 import re
 import shutil
 import tempfile
-from datetime import datetime
 import uuid
+from datetime import datetime
+import difflib
 
 from dotenv import load_dotenv
 load_dotenv()  # Load .env file (Gemini + Firebase keys)
@@ -16,6 +17,7 @@ from flask import (Flask, flash, jsonify, redirect, render_template, request,
                    send_file, url_for)
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.utils import secure_filename
+from markupsafe import Markup, escape
 
 from analyzer import analyze_cv_against_jd
 from firebase_admin import firestore
@@ -201,6 +203,33 @@ def _bearer_token() -> str:
 def _estimate_tokens_from_text(*parts: str) -> int:
     chars = sum(len(p) for p in parts if isinstance(p, str))
     return int(chars / 4)  # rough heuristic
+
+
+def _diff_words_html(old: str, new: str) -> tuple[Markup, Markup]:
+    """Return word-level diff HTML for old and new strings."""
+    # Split into tokens preserving whitespace
+    def _split(text: str):
+        return re.split(r'(\s+)', text or '')
+
+    a = _split(old)
+    b = _split(new)
+    sm = difflib.SequenceMatcher(a=a, b=b)
+    old_parts: list[str] = []
+    new_parts: list[str] = []
+
+    for tag, i1, i2, j1, j2 in sm.get_opcodes():
+        if tag == 'equal':
+            old_parts.extend(escape(tok) for tok in a[i1:i2])
+            new_parts.extend(escape(tok) for tok in b[j1:j2])
+        elif tag == 'replace':
+            old_parts.extend(f'<span class="diff-del">{escape(tok)}</span>' for tok in a[i1:i2])
+            new_parts.extend(f'<span class="diff-add">{escape(tok)}</span>' for tok in b[j1:j2])
+        elif tag == 'delete':
+            old_parts.extend(f'<span class="diff-del">{escape(tok)}</span>' for tok in a[i1:i2])
+        elif tag == 'insert':
+            new_parts.extend(f'<span class="diff-add">{escape(tok)}</span>' for tok in b[j1:j2])
+
+    return Markup(''.join(old_parts)), Markup(''.join(new_parts))
 
 
 # ---------------------------------------------------------------------------
@@ -665,6 +694,10 @@ def rewrite_run():
         flash(f'Rewrite error: {e}', 'error')
         return redirect(url_for('index'))
 
+    old_cv_text = cv_text
+    new_cv_text = rewrites.get('optimized_cv') or '\n'.join(rewrites.get('rewritten_bullets', []))
+    diff_old, diff_new = _diff_words_html(old_cv_text, new_cv_text)
+
     rewrite_session = _save_session_payload({
         'rewrites': rewrites,
         'results': results,
@@ -672,6 +705,8 @@ def rewrite_run():
         'token_usage_est': _estimate_tokens_from_text(rewrites.get('optimized_cv', ''), rewrites.get('summary', '')),
         'download_name': f"rewritten_cv_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.pdf",
         'original_cv': cv_text,
+        'diff_old': str(diff_old),
+        'diff_new': str(diff_new),
     })
 
     return render_template('rewrite.html',
@@ -679,7 +714,9 @@ def rewrite_run():
                            results=results,
                            cost_rewrite=COST_REWRITE,
                            rewrite_session=rewrite_session,
-                           original_cv=cv_text)
+                           original_cv=cv_text,
+                           diff_old=diff_old,
+                           diff_new=diff_new)
 
 
 # ---------------------------------------------------------------------------

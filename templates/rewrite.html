@@ -22,6 +22,11 @@
 </section>
 
 <section class="max-w-6xl mx-auto px-4 sm:px-6 py-8 space-y-6">
+    <style>
+        .diff-add { background: #e6ffed; color: #065f46; }
+        .diff-del { background: #fee2e2; color: #b91c1c; text-decoration: line-through; }
+    </style>
+
     <div class="bg-white rounded-2xl shadow-lg border border-emerald-100 p-6">
         <h2 class="text-lg font-bold text-slate-800 mb-3">What Changed</h2>
         {% if rewrites and rewrites.changes %}
@@ -83,6 +88,26 @@
                 {% else %}
                 {{ rewrites.rewritten_bullets | join('\n') if rewrites and rewrites.rewritten_bullets else 'Optimized CV content not available.' }}
                 {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Diff view -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="bg-white rounded-2xl shadow-lg border border-slate-200 p-4">
+            <div class="flex items-center justify-between mb-2">
+                <h3 class="text-sm font-bold text-slate-800">Original (highlighted)</h3>
+            </div>
+            <div class="text-sm leading-6 text-slate-700 bg-slate-50 border border-slate-200 rounded-xl p-3 h-full diff-block">
+                {{ diff_old|safe }}
+            </div>
+        </div>
+        <div class="bg-white rounded-2xl shadow-lg border border-slate-200 p-4">
+            <div class="flex items-center justify-between mb-2">
+                <h3 class="text-sm font-bold text-slate-800">Optimized (highlighted)</h3>
+            </div>
+            <div class="text-sm leading-6 text-slate-700 bg-slate-50 border border-slate-200 rounded-xl p-3 h-full diff-block">
+                {{ diff_new|safe }}
             </div>
         </div>
     </div>

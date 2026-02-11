@@ -26,6 +26,14 @@ services:
         value: "true"
       - key: FIRESTORE_ENABLED
         value: "false"
+      - key: FREE_CREDITS
+        value: "3"
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_PRICE_ID
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
       - key: FIREBASE_SERVICE_ACCOUNT_KEY
         sync: false
       - key: NEXT_PUBLIC_FIREBASE_API_KEY

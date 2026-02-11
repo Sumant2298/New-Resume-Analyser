@@ -215,6 +215,10 @@ INSIGHTS_SCHEMA = """{
   ]
 }"""
 
+REWRITE_SCHEMA = """{
+  "rewritten_bullets": ["Bullet 1", "Bullet 2"],
+  "summary": "One-sentence recruiter-friendly summary"
+}"""
 
 
 def _safe_json_parse(text: str):
@@ -1238,6 +1242,51 @@ RESUME:
 
     except Exception as exc:
         logger.warning('Gemini insights generation failed: %s', exc)
+        return {}
+
+def rewrite_cv_bullets(cv_text: str, jd_text: str, tone: str = "concise") -> dict:
+    if not LLM_ENABLED:
+        logger.info('Gemini disabled (rewrite)')
+        return {}
+
+    cv_truncated = cv_text[:2500]
+    jd_truncated = jd_text[:1500]
+
+    prompt = f"""Rewrite the CV bullet points to better match the job description.
+Keep meaning truthful. Keep to 1-2 lines per bullet. Tone: {tone}.
+
+JOB DESCRIPTION:
+\"\"\"
+{jd_truncated}
+\"\"\"
+
+CV (bullets or text):
+\"\"\"
+{cv_truncated}
+\"\"\"
+
+Return ONLY JSON:
+{REWRITE_SCHEMA}
+"""
+    try:
+        raw = _call_gemini(
+            SYSTEM_PROMPT,
+            prompt,
+            temperature=0.2,
+            max_output_tokens=800,
+            response_mime_type="application/json",
+            min_output_chars=80,
+        )
+        data = _safe_json_parse(raw) or {}
+        bullets = data.get("rewritten_bullets") if isinstance(data, dict) else []
+        summary = data.get("summary") if isinstance(data, dict) else ""
+        if isinstance(bullets, list):
+            bullets = [b for b in bullets if isinstance(b, str) and b.strip()]
+        else:
+            bullets = []
+        return {"rewritten_bullets": bullets, "summary": summary}
+    except Exception as exc:
+        logger.warning("Gemini rewrite failed: %s", exc)
         return {}
 
 

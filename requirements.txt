@@ -11,3 +11,4 @@ beautifulsoup4>=4.12
 trafilatura>=1.12
 firebase-admin>=6.5
 python-dotenv>=1.0
+stripe>=8.9

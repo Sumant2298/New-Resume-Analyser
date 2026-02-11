@@ -19,6 +19,9 @@ from werkzeug.utils import secure_filename
 from analyzer import analyze_cv_against_jd
 from firebase_admin import firestore
 from firebase_admin_init import get_firebase
+from llm_service import rewrite_cv_bullets
+
+import stripe
 
 # Configure logging for debugging on Render
 logging.basicConfig(level=logging.INFO,
@@ -51,7 +54,11 @@ def _firebase_client_config() -> dict:
 def inject_firebase_config():
     config = _firebase_client_config()
     enabled = all(config.values())
-    return {'firebase_config': config, 'firebase_enabled': enabled}
+    return {
+        'firebase_config': config,
+        'firebase_enabled': enabled,
+        'stripe_enabled': stripe_enabled,
+    }
 
 # Folder to store consented CVs
 CV_STORAGE = os.environ.get('CV_STORAGE_PATH',
@@ -60,6 +67,16 @@ os.makedirs(CV_STORAGE, exist_ok=True)
 
 # Admin token for accessing stored CVs (set via env var on Render)
 ADMIN_TOKEN = os.environ.get('ADMIN_TOKEN', 'change-me-in-production')
+FREE_CREDITS = int(os.environ.get('FREE_CREDITS', '3'))
+
+STRIPE_SECRET_KEY = os.environ.get('STRIPE_SECRET_KEY')
+STRIPE_PRICE_ID = os.environ.get('STRIPE_PRICE_ID')
+STRIPE_WEBHOOK_SECRET = os.environ.get('STRIPE_WEBHOOK_SECRET')
+PUBLIC_URL = os.environ.get('PUBLIC_URL') or os.environ.get('RENDER_EXTERNAL_URL') or ''
+
+stripe_enabled = bool(STRIPE_SECRET_KEY and STRIPE_PRICE_ID)
+if STRIPE_SECRET_KEY:
+    stripe.api_key = STRIPE_SECRET_KEY
 
 ALLOWED_EXTENSIONS = {'pdf', 'docx', 'txt'}
 
@@ -74,6 +91,56 @@ BROWSER_HEADERS = {
 
 def allowed_file(filename: str) -> bool:
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+
+# ---------------------------------------------------------------------------
+# Credits helpers (Firestore)
+# ---------------------------------------------------------------------------
+
+def _firestore_enabled_and_ready(firestore_db) -> bool:
+    return firestore_db is not None
+
+
+def _ensure_user_doc(firestore_db, user_id: str, email: str | None):
+    doc_ref = firestore_db.collection('users').document(user_id)
+    doc = doc_ref.get()
+    credits = FREE_CREDITS
+    if doc.exists:
+        data = doc.to_dict() or {}
+        credits = int(data.get('credits', credits))
+    else:
+        doc_ref.set({
+            'email': email,
+            'credits': credits,
+            'createdAt': firestore.SERVER_TIMESTAMP,
+        }, merge=True)
+    return doc_ref, credits
+
+
+def _deduct_credit(firestore_db, user_id: str, email: str | None, amount: int = 1) -> bool:
+    doc_ref, credits = _ensure_user_doc(firestore_db, user_id, email)
+    if credits < amount:
+        return False
+    doc_ref.update({
+        'credits': firestore.Increment(-amount),
+        'lastDebitAt': firestore.SERVER_TIMESTAMP,
+    })
+    return True
+
+
+def _add_credit(firestore_db, user_id: str, email: str | None, amount: int = 1):
+    doc_ref, _ = _ensure_user_doc(firestore_db, user_id, email)
+    doc_ref.update({
+        'credits': firestore.Increment(amount),
+        'lastCreditAt': firestore.SERVER_TIMESTAMP,
+    })
+
+
+def _bearer_token() -> str:
+    auth_header = request.headers.get('Authorization', '')
+    if auth_header.lower().startswith('bearer '):
+        return auth_header[7:].strip()
+    return ''
 
 
 # ---------------------------------------------------------------------------
@@ -422,9 +489,18 @@ def analyze():
     if len(jd_text.split()) < 10:
         flash('Job description seems very short. Results may be unreliable.', 'warning')
 
+    charged_credit = False
+    if _firestore_enabled_and_ready(firestore_db):
+        charged_credit = _deduct_credit(firestore_db, user_id, user_email, amount=1)
+        if not charged_credit:
+            flash('You are out of credits. Buy more to run analysis.', 'error')
+            return redirect(url_for('index'))
+
     try:
         results = analyze_cv_against_jd(cv_text, jd_text)
     except Exception as e:
+        if charged_credit and _firestore_enabled_and_ready(firestore_db):
+            _add_credit(firestore_db, user_id, user_email, amount=1)
         flash(f'Analysis error: {e}', 'error')
         return redirect(url_for('index'))
 
@@ -451,6 +527,170 @@ def analyze():
         logger.warning('Firestore write failed: %s', e)
 
     return render_template('results.html', results=results)
+
+
+# ---------------------------------------------------------------------------
+# CV rewrite (consumes 1 credit)
+# ---------------------------------------------------------------------------
+
+@app.route('/rewrite', methods=['POST'])
+def rewrite():
+    id_token = request.form.get('id_token', '').strip()
+    if not id_token:
+        flash('Please sign in with Google to rewrite.', 'error')
+        return redirect(url_for('index'))
+
+    try:
+        auth_client, firestore_db = get_firebase()
+        decoded = auth_client.verify_id_token(id_token)
+    except Exception as e:
+        logger.warning('Firebase auth failed (rewrite): %s', e)
+        flash('Google sign-in failed. Please sign in again.', 'error')
+        return redirect(url_for('index'))
+
+    user_id = decoded.get('uid')
+    user_email = decoded.get('email')
+
+    try:
+        cv_text = _process_input('cv_file', 'cv_text', url_field='cv_url',
+                                 save_cv=False, url_extractor=_extract_from_linkedin_url)
+        jd_text = _process_input('jd_file', 'jd_text', url_field='jd_url',
+                                 save_cv=False, url_extractor=_extract_from_jd_url)
+    except Exception as e:
+        flash(f'Error reading input: {e}', 'error')
+        return redirect(url_for('index'))
+
+    if not cv_text or not jd_text:
+        flash('Please provide both a CV and a Job Description.', 'error')
+        return redirect(url_for('index'))
+
+    charged_credit = False
+    if _firestore_enabled_and_ready(firestore_db):
+        charged_credit = _deduct_credit(firestore_db, user_id, user_email, amount=1)
+        if not charged_credit:
+            flash('You are out of credits. Buy more to run rewrites.', 'error')
+            return redirect(url_for('index'))
+
+    try:
+        rewrites = rewrite_cv_bullets(cv_text, jd_text)
+    except Exception as e:
+        if charged_credit and _firestore_enabled_and_ready(firestore_db):
+            _add_credit(firestore_db, user_id, user_email, amount=1)
+        flash(f'Rewrite error: {e}', 'error')
+        return redirect(url_for('index'))
+
+    return render_template('rewrite.html', rewrites=rewrites)
+
+
+# ---------------------------------------------------------------------------
+# Credits API
+# ---------------------------------------------------------------------------
+
+@app.route('/api/credits', methods=['GET'])
+def api_credits():
+    token = _bearer_token()
+    if not token:
+        return jsonify({'error': 'missing token'}), 401
+    try:
+        auth_client, firestore_db = get_firebase()
+        decoded = auth_client.verify_id_token(token)
+    except Exception:
+        return jsonify({'error': 'invalid token'}), 401
+
+    if not _firestore_enabled_and_ready(firestore_db):
+        return jsonify({'credits': 'unlimited', 'firestore': False})
+
+    _, credits = _ensure_user_doc(firestore_db, decoded.get('uid'), decoded.get('email'))
+    return jsonify({'credits': credits})
+
+
+# ---------------------------------------------------------------------------
+# Stripe checkout + webhook
+# ---------------------------------------------------------------------------
+
+@app.route('/api/checkout', methods=['POST'])
+def api_checkout():
+    if not stripe_enabled:
+        return jsonify({'error': 'Stripe not configured'}), 400
+    token = _bearer_token()
+    if not token:
+        return jsonify({'error': 'missing token'}), 401
+    try:
+        auth_client, firestore_db = get_firebase()
+        decoded = auth_client.verify_id_token(token)
+    except Exception:
+        return jsonify({'error': 'invalid token'}), 401
+
+    quantity = 1
+    try:
+        body = request.get_json(silent=True) or {}
+        quantity = int(body.get('quantity', 1))
+        if quantity < 1:
+            quantity = 1
+    except Exception:
+        quantity = 1
+
+    success_url = (PUBLIC_URL or 'http://localhost:5050') + '/billing/success?session_id={CHECKOUT_SESSION_ID}'
+    cancel_url = (PUBLIC_URL or 'http://localhost:5050') + '/billing/cancel'
+
+    try:
+        session = stripe.checkout.Session.create(
+            mode='payment',
+            line_items=[{
+                'price': STRIPE_PRICE_ID,
+                'quantity': quantity,
+            }],
+            success_url=success_url,
+            cancel_url=cancel_url,
+            metadata={
+                'user_id': decoded.get('uid'),
+                'email': decoded.get('email', ''),
+                'quantity': quantity,
+            }
+        )
+        return jsonify({'url': session.url})
+    except Exception as e:
+        logger.warning('Stripe checkout failed: %s', e)
+        return jsonify({'error': 'stripe_error'}), 500
+
+
+@app.route('/stripe/webhook', methods=['POST'])
+def stripe_webhook():
+    if not stripe_enabled or not STRIPE_WEBHOOK_SECRET:
+        return 'Webhook not configured', 400
+    payload = request.get_data(as_text=True)
+    sig = request.headers.get('Stripe-Signature', '')
+    try:
+        event = stripe.Webhook.construct_event(payload, sig, STRIPE_WEBHOOK_SECRET)
+    except Exception as e:
+        logger.warning('Stripe webhook signature failed: %s', e)
+        return 'Bad signature', 400
+
+    if event.get('type') == 'checkout.session.completed':
+        session = event['data']['object']
+        user_id = session.get('metadata', {}).get('user_id')
+        email = session.get('metadata', {}).get('email')
+        quantity = int(session.get('metadata', {}).get('quantity', 1))
+        if user_id:
+            try:
+                _, firestore_db = get_firebase()
+                if _firestore_enabled_and_ready(firestore_db):
+                    _add_credit(firestore_db, user_id, email, amount=quantity)
+            except Exception as e:
+                logger.warning('Failed to add credits from webhook: %s', e)
+    return 'ok', 200
+
+
+@app.route('/billing/success')
+def billing_success():
+    flash('Payment successful. Credits added to your account.', 'success')
+    return redirect(url_for('index'))
+
+
+@app.route('/billing/cancel')
+def billing_cancel():
+    flash('Payment cancelled.', 'warning')
+    return redirect(url_for('index'))
 
 
 # ---------------------------------------------------------------------------

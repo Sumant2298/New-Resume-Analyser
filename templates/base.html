@@ -62,9 +62,15 @@
                 </div>
             </a>
             <div class="flex items-center gap-3 text-xs">
+                <span id="creditsBadge" class="hidden bg-white/15 px-3 py-1.5 rounded-lg font-semibold text-white/90"></span>
                 <span id="authStatus" class="hidden text-white/70">
                     Signed in as <span id="userEmail" class="font-semibold text-white/90"></span>
                 </span>
+                {% if stripe_enabled %}
+                <button id="buyCreditsBtn" class="hidden text-xs bg-amber-100/90 text-amber-800 hover:bg-amber-50 px-3 py-1.5 rounded-lg transition font-semibold">
+                    Buy credits
+                </button>
+                {% endif %}
                 <button id="signInBtn" class="text-xs bg-white/15 hover:bg-white/25 backdrop-blur-sm px-3 py-1.5 rounded-lg transition font-medium">
                     Sign in with Google
                 </button>
@@ -123,6 +129,8 @@
         const signOutBtn = document.getElementById('signOutBtn');
         const authStatus = document.getElementById('authStatus');
         const userEmail = document.getElementById('userEmail');
+        const creditsBadge = document.getElementById('creditsBadge');
+        const buyCreditsBtn = document.getElementById('buyCreditsBtn');
 
         const updateTokenFields = (token) => {
             document.querySelectorAll('.id-token-field').forEach((el) => {
@@ -130,11 +138,29 @@
             });
         };
 
+        const refreshCredits = async (token) => {
+            if (!creditsBadge) return;
+            try {
+                const res = await fetch('/api/credits', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!res.ok) throw new Error('credits');
+                const data = await res.json();
+                const label = data.credits === 'unlimited' ? '∞ credits' : `${data.credits} credits`;
+                creditsBadge.textContent = label;
+                creditsBadge.classList.remove('hidden');
+                if (buyCreditsBtn) buyCreditsBtn.classList.remove('hidden');
+            } catch (e) {
+                creditsBadge.classList.add('hidden');
+            }
+        };
+
         const setSignedInState = async (user) => {
             if (user) {
                 const token = await user.getIdToken();
                 localStorage.setItem('firebase_id_token', token);
                 updateTokenFields(token);
+                await refreshCredits(token);
                 if (authStatus && userEmail) {
                     authStatus.classList.remove('hidden');
                     userEmail.textContent = user.email || 'Google user';
@@ -144,6 +170,7 @@
             } else {
                 localStorage.removeItem('firebase_id_token');
                 updateTokenFields('');
+                if (creditsBadge) creditsBadge.classList.add('hidden');
                 if (authStatus) authStatus.classList.add('hidden');
                 if (userEmail) userEmail.textContent = '';
                 signInBtn?.classList.remove('hidden');
@@ -157,6 +184,28 @@
 
         signOutBtn?.addEventListener('click', async () => {
             await signOut(auth);
+        });
+
+        buyCreditsBtn?.addEventListener('click', async () => {
+            const token = localStorage.getItem('firebase_id_token');
+            if (!token) {
+                alert('Please sign in first.');
+                return;
+            }
+            const res = await fetch('/api/checkout', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ quantity: 1 })
+            });
+            const data = await res.json();
+            if (data.url) {
+                window.location.href = data.url;
+            } else {
+                alert('Unable to start checkout right now.');
+            }
         });
 
         onAuthStateChanged(auth, (user) => {

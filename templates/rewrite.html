@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Rewrite Suggestions{% endblock %}
+
+{% block content %}
+<section class="max-w-5xl mx-auto px-4 sm:px-6 py-10">
+    <div class="bg-white border border-slate-200 rounded-2xl shadow-lg p-6 sm:p-8">
+        <div class="flex items-center justify-between mb-6">
+            <div>
+                <p class="text-xs uppercase tracking-[0.2em] text-slate-400 font-semibold">CV Rewrite</p>
+                <h1 class="text-2xl font-bold text-slate-800 mt-1">Recruiter-ready phrasing</h1>
+            </div>
+        </div>
+
+        {% if rewrites and rewrites.rewritten_bullets %}
+        <div class="space-y-4">
+            {% for bullet in rewrites.rewritten_bullets %}
+            <div class="p-4 bg-emerald-50 border border-emerald-100 rounded-xl text-sm text-slate-800">
+                {{ bullet }}
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="text-slate-500 text-sm">No rewrite suggestions were generated. Please try again.</p>
+        {% endif %}
+
+        {% if rewrites.summary %}
+        <div class="mt-6 p-4 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-700">
+            <span class="font-semibold text-slate-800">Summary:</span> {{ rewrites.summary }}
+        </div>
+        {% endif %}
+    </div>
+</section>
+{% endblock %}

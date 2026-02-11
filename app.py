@@ -32,6 +32,7 @@ app.secret_key = os.environ.get('SECRET_KEY', os.urandom(24))
 app.config['PREFERRED_URL_SCHEME'] = 'https'
 app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024  # 10 MB
 app.config['UPLOAD_FOLDER'] = tempfile.mkdtemp()
+DISABLE_AUTH = os.environ.get('DISABLE_AUTH', 'false').strip().lower() in ('1', 'true', 'yes', 'on')
 
 # ---------------------------------------------------------------------------
 # Firebase client config (for Google Sign-In on the frontend)
@@ -51,7 +52,11 @@ def _firebase_client_config() -> dict:
 def inject_firebase_config():
     config = _firebase_client_config()
     enabled = all(config.values())
-    return {'firebase_config': config, 'firebase_enabled': enabled}
+    return {
+        'firebase_config': config,
+        'firebase_enabled': enabled,
+        'auth_required': not DISABLE_AUTH,
+    }
 
 # Folder to store consented CVs
 CV_STORAGE = os.environ.get('CV_STORAGE_PATH',
@@ -382,22 +387,26 @@ def index():
 @app.route('/analyze', methods=['POST'])
 def analyze():
     consent_given = request.form.get('cv_consent') == 'yes'
+    user_id = None
+    user_email = None
+    firestore_db = None
 
-    id_token = request.form.get('id_token', '').strip()
-    if not id_token:
-        flash('Please sign in with Google to analyze.', 'error')
-        return redirect(url_for('index'))
+    if not DISABLE_AUTH:
+        id_token = request.form.get('id_token', '').strip()
+        if not id_token:
+            flash('Please sign in with Google to analyze.', 'error')
+            return redirect(url_for('index'))
 
-    try:
-        auth_client, firestore_db = get_firebase()
-        decoded = auth_client.verify_id_token(id_token)
-    except Exception as e:
-        logger.warning('Firebase auth failed: %s', e)
-        flash('Google sign-in failed. Please sign in again.', 'error')
-        return redirect(url_for('index'))
+        try:
+            auth_client, firestore_db = get_firebase()
+            decoded = auth_client.verify_id_token(id_token)
+        except Exception as e:
+            logger.warning('Firebase auth failed: %s', e)
+            flash('Google sign-in failed. Please sign in again.', 'error')
+            return redirect(url_for('index'))
 
-    user_id = decoded.get('uid')
-    user_email = decoded.get('email')
+        user_id = decoded.get('uid')
+        user_email = decoded.get('email')
 
     try:
         cv_text = _process_input(

@@ -34,7 +34,11 @@
                         </svg>
                         Analyze My Resume
                     </a>
+                    {% if auth_required %}
                     <span class="text-sm text-white/50">Free &mdash; sign in with Google to continue</span>
+                    {% else %}
+                    <span class="text-sm text-white/50">Local mode active &mdash; auth disabled</span>
+                    {% endif %}
                 </div>
                 <!-- Trust signals -->
                 <div class="grid grid-cols-3 gap-4 max-w-sm">
@@ -284,10 +288,11 @@ function switchTab(group, btn, targetId) {
 
 /* Loading state on submit */
 document.getElementById('analyze-form').addEventListener('submit', function(event) {
+    const authRequired = {{ 'true' if auth_required else 'false' }};
     const token = localStorage.getItem('firebase_id_token');
     const tokenField = document.getElementById('id_token');
     if (tokenField) tokenField.value = token || '';
-    if (!token) {
+    if (authRequired && !token) {
         event.preventDefault();
         alert('Please sign in with Google before analyzing.');
         return;

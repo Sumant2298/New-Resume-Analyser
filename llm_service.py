@@ -17,11 +17,15 @@ import requests
 
 logger = logging.getLogger(__name__)
 
+LLM_PROVIDER = os.environ.get('LLM_PROVIDER', 'gemini').strip().lower()
 GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', '')
 GEMINI_MODEL = os.environ.get('GEMINI_MODEL', 'gemini-2.0-flash')
 GEMINI_TIMEOUT = int(os.environ.get('GEMINI_TIMEOUT', '45'))
 GEMINI_MIN_JSON_CHARS = int(os.environ.get('GEMINI_MIN_JSON_CHARS', '180'))
-LLM_ENABLED = bool(GEMINI_API_KEY)
+OLLAMA_BASE_URL = os.environ.get('OLLAMA_BASE_URL', 'http://127.0.0.1:11434').rstrip('/')
+OLLAMA_MODEL = os.environ.get('OLLAMA_MODEL', 'llama3.1:8b')
+OLLAMA_TIMEOUT = int(os.environ.get('OLLAMA_TIMEOUT', str(GEMINI_TIMEOUT)))
+LLM_ENABLED = bool(GEMINI_API_KEY) if LLM_PROVIDER == 'gemini' else bool(OLLAMA_MODEL)
 _MODEL_CACHE = {"ts": 0.0, "models": []}
 _LAST_WORKING_MODEL = None
 _PREFERRED_MODELS = [
@@ -418,6 +422,8 @@ Text:
 
 
 def _list_models() -> list[str]:
+    if LLM_PROVIDER != 'gemini':
+        return []
     if not GEMINI_API_KEY:
         return []
     now = time.time()
@@ -463,12 +469,53 @@ def _candidate_models() -> list[str]:
     return candidates[:6]
 
 
+def _call_ollama(system_prompt: str, user_prompt: str,
+                 temperature: float = 0.2, max_output_tokens: int = 1500,
+                 response_mime_type: str | None = None) -> str:
+    if not OLLAMA_MODEL:
+        return ''
+
+    prompt = f"{system_prompt}\n\n{user_prompt}"
+    payload = {
+        "model": OLLAMA_MODEL,
+        "prompt": prompt,
+        "stream": False,
+        "options": {
+            "temperature": temperature,
+            "num_predict": max_output_tokens,
+        },
+    }
+    if response_mime_type == "application/json":
+        payload["format"] = "json"
+
+    url = f"{OLLAMA_BASE_URL}/api/generate"
+    logger.info('Ollama request start (model=%s, timeout=%ss, prompt_chars=%s)',
+                OLLAMA_MODEL, OLLAMA_TIMEOUT, len(prompt))
+    response = requests.post(url, json=payload, timeout=OLLAMA_TIMEOUT)
+    if not response.ok:
+        raise RuntimeError(f"Ollama error: {response.status_code} {response.text[:300]}")
+    data = response.json()
+    text = str(data.get("response", "")).strip()
+    logger.info('Ollama response ok (chars=%s, done_reason=%s)',
+                len(text), data.get("done_reason"))
+    return text
+
+
 def _call_gemini(system_prompt: str, user_prompt: str,
                  temperature: float = 0.2, max_output_tokens: int = 1500,
                  response_mime_type: str | None = None,
                  min_output_chars: int | None = None) -> str:
     if not LLM_ENABLED:
         return ''
+
+    if LLM_PROVIDER == 'ollama':
+        return _call_ollama(
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            temperature=temperature,
+            max_output_tokens=max_output_tokens,
+            response_mime_type=response_mime_type,
+        )
 
     headers = {
         "Content-Type": "application/json",

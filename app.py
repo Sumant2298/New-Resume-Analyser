@@ -671,9 +671,15 @@ def rewrite_run():
         'created_at': datetime.utcnow().isoformat(),
         'token_usage_est': _estimate_tokens_from_text(rewrites.get('optimized_cv', ''), rewrites.get('summary', '')),
         'download_name': f"rewritten_cv_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.pdf",
+        'original_cv': cv_text,
     })
 
-    return render_template('rewrite.html', rewrites=rewrites, results=results, cost_rewrite=COST_REWRITE, rewrite_session=rewrite_session)
+    return render_template('rewrite.html',
+                           rewrites=rewrites,
+                           results=results,
+                           cost_rewrite=COST_REWRITE,
+                           rewrite_session=rewrite_session,
+                           original_cv=cv_text)
 
 
 # ---------------------------------------------------------------------------

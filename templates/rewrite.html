@@ -60,6 +60,32 @@
             {% endif %}
         </div>
     </div>
+
+    <!-- Side-by-side comparison -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="bg-white rounded-2xl shadow-lg border border-slate-200 p-4">
+            <div class="flex items-center justify-between mb-2">
+                <h3 class="text-sm font-bold text-slate-800">Original CV</h3>
+                <button onclick="copyColumn('originalCv')" class="text-[11px] px-2 py-1 rounded border border-slate-200 text-slate-600 hover:bg-slate-50">Copy</button>
+            </div>
+            <div id="originalCv" class="whitespace-pre-wrap text-sm text-slate-700 leading-6 bg-slate-50 border border-slate-200 rounded-xl p-3 h-full">
+                {{ original_cv or 'Original CV text not available from session.' }}
+            </div>
+        </div>
+        <div class="bg-white rounded-2xl shadow-lg border border-slate-200 p-4">
+            <div class="flex items-center justify-between mb-2">
+                <h3 class="text-sm font-bold text-slate-800">Optimized CV</h3>
+                <button onclick="copyColumn('optimizedCv')" class="text-[11px] px-2 py-1 rounded border border-slate-200 text-slate-600 hover:bg-slate-50">Copy</button>
+            </div>
+            <div class="whitespace-pre-wrap text-sm text-slate-700 leading-6 bg-slate-50 border border-slate-200 rounded-xl p-3 h-full">
+                {% if rewrites and rewrites.optimized_cv %}
+                {{ rewrites.optimized_cv }}
+                {% else %}
+                {{ rewrites.rewritten_bullets | join('\n') if rewrites and rewrites.rewritten_bullets else 'Optimized CV content not available.' }}
+                {% endif %}
+            </div>
+        </div>
+    </div>
 </section>
 
 <script>
@@ -69,6 +95,14 @@ function copyOptimized() {
     const text = el.innerText;
     navigator.clipboard.writeText(text).then(() => {
         alert('Copied optimized CV to clipboard');
+    });
+}
+
+function copyColumn(id) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    navigator.clipboard.writeText(el.innerText).then(() => {
+        alert('Copied text');
     });
 }
 </script>

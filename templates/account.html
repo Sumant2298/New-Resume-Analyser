@@ -5,8 +5,8 @@
 <section class="bg-gradient-to-r from-brand-700 via-brand-600 to-emerald-500 text-white">
     <div class="max-w-6xl mx-auto px-4 sm:px-6 py-8 flex items-center justify-between">
         <div>
-            <p class="text-xs uppercase tracking-[0.2em] text-white/70 font-semibold">Get Credits, Rewrite Your CV</p>
-            <h1 class="text-2xl font-bold">Each CV rewrite uses {{ cost_rewrite }} credits</h1>
+            <p class="text-xs uppercase tracking-[0.2em] text-white/70 font-semibold">Manage Credits</p>
+            <h1 class="text-2xl font-bold">Each CV analysis uses {{ cost_analyze }} credits</h1>
         </div>
         <div id="creditsPill" class="hidden bg-white/15 px-4 py-2 rounded-full text-sm font-semibold">
             <span id="creditsCount">–</span> credits remaining
@@ -15,7 +15,7 @@
 </section>
 
 <section class="max-w-6xl mx-auto px-4 sm:px-6 py-10 space-y-8">
-    <p class="text-sm text-slate-500">Credits never expire. {{ cost_analyze }} credits per CV+JD analysis, {{ cost_rewrite }} credits per rewrite.</p>
+    <p class="text-sm text-slate-500">Credits never expire. {{ cost_analyze }} credits per CV+JD analysis. Rewrite currently unavailable.</p>
     <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
         {% for plan in plans %}
         <div class="bg-white rounded-2xl shadow-lg border border-slate-100 p-6 relative">

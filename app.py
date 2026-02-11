@@ -72,7 +72,7 @@ os.makedirs(CV_STORAGE, exist_ok=True)
 ADMIN_TOKEN = os.environ.get('ADMIN_TOKEN', 'change-me-in-production')
 FREE_CREDITS = int(os.environ.get('FREE_CREDITS', '3'))
 COST_ANALYZE = int(os.environ.get('COST_ANALYZE', '2'))
-COST_REWRITE = int(os.environ.get('COST_REWRITE', '5'))
+COST_REWRITE = int(os.environ.get('COST_REWRITE', '0'))  # rewrite disabled for now
 
 # Default initial credits when user first signs in
 INITIAL_CREDITS = int(os.environ.get('INITIAL_CREDITS', '100'))
@@ -649,107 +649,6 @@ def analyze():
 
 
 # ---------------------------------------------------------------------------
-# CV rewrite flow
-# ---------------------------------------------------------------------------
-
-@app.route('/rewrite/start')
-def rewrite_start():
-    sid = request.args.get('sid', '')
-    payload = _load_session_payload(sid) if sid else None
-    if not payload:
-        flash('Session expired. Please run analysis again.', 'warning')
-        return redirect(url_for('index'))
-
-    results = payload.get('results', {})
-    quick = results.get('quick_match', {}) if isinstance(results, dict) else {}
-    return render_template('rewrite_confirm.html',
-                           session_id=sid,
-                           cost=COST_REWRITE,
-                           results=results,
-                           quick_match=quick)
-
-
-@app.route('/rewrite/run', methods=['POST'])
-def rewrite_run():
-    id_token = request.form.get('id_token', '').strip()
-    sid = request.form.get('session_id', '').strip()
-    if not id_token or not sid:
-        flash('Missing token or session. Please sign in and try again.', 'error')
-        return redirect(url_for('index'))
-
-    try:
-        auth_client, firestore_db = get_firebase()
-        decoded = auth_client.verify_id_token(id_token)
-    except Exception as e:
-        logger.warning('Firebase auth failed (rewrite): %s', e)
-        flash('Google sign-in failed. Please sign in again.', 'error')
-        return redirect(url_for('index'))
-
-    user_id = decoded.get('uid')
-    user_email = decoded.get('email')
-
-    payload = _load_session_payload(sid)
-    if not payload:
-        flash('Session expired. Please run analysis again.', 'warning')
-        return redirect(url_for('index'))
-
-    cv_text = payload.get('cv_text', '')
-    jd_text = payload.get('jd_text', '')
-    results = payload.get('results', {})
-    if not cv_text or not jd_text:
-        flash('Session missing CV or JD text. Please analyze again.', 'error')
-        return redirect(url_for('index'))
-
-    charged_credit = False
-    if _firestore_enabled_and_ready(firestore_db):
-        charged_credit = _deduct_credit(firestore_db, user_id, user_email, amount=COST_REWRITE)
-        if not charged_credit:
-            flash('You are out of credits. Buy more to run rewrites.', 'error')
-            return redirect(url_for('index'))
-
-    try:
-        rewrites = rewrite_cv_bullets(cv_text, jd_text)
-    except Exception as e:
-        if charged_credit and _firestore_enabled_and_ready(firestore_db):
-            _add_credit(firestore_db, user_id, user_email, amount=COST_REWRITE)
-        flash(f'Rewrite error: {e}', 'error')
-        return redirect(url_for('index'))
-
-    old_cv_text = cv_text
-    new_cv_text = rewrites.get('optimized_cv') or '\n'.join(rewrites.get('rewritten_bullets', []))
-    diff_old, diff_new = _diff_words_html(old_cv_text, new_cv_text)
-    line_diff_old, line_diff_new = _diff_lines_html(old_cv_text, new_cv_text)
-
-    rewrite_session = _save_session_payload({
-        'rewrites': rewrites,
-        'results': results,
-        'created_at': datetime.utcnow().isoformat(),
-        'token_usage_est': _estimate_tokens_from_text(rewrites.get('optimized_cv', ''), rewrites.get('summary', '')),
-        'download_name': f"rewritten_cv_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.pdf",
-        'original_cv': cv_text,
-        'diff_old': str(diff_old),
-        'diff_new': str(diff_new),
-        'line_diff_old': str(line_diff_old),
-        'line_diff_new': str(line_diff_new),
-        'jd_text': jd_text,
-    })
-
-    return render_template('rewrite.html',
-                           rewrites=rewrites,
-                           results=results,
-                           cost_rewrite=COST_REWRITE,
-                           rewrite_session=rewrite_session,
-                           original_cv=cv_text,
-                           diff_old=diff_old,
-                           diff_new=diff_new,
-                           line_diff_old=line_diff_old,
-                           line_diff_new=line_diff_new)
-
-
-# ---------------------------------------------------------------------------
-# Credits API
-# ---------------------------------------------------------------------------
-
 @app.route('/api/credits', methods=['GET'])
 def api_credits():
     token = _bearer_token()
@@ -876,22 +775,6 @@ def billing_cancel():
     return redirect(url_for('index'))
 
 
-@app.route('/rewrite/pdf')
-def rewrite_pdf():
-    sid = request.args.get('sid', '')
-    payload = _load_session_payload(sid) if sid else None
-    if not payload:
-        return 'Not found', 404
-    rewrites = payload.get('rewrites') or {}
-    content = rewrites.get('optimized_cv') or '\n'.join(rewrites.get('rewritten_bullets', []))
-    if not content:
-        return 'No content', 400
-    filename = payload.get('download_name', 'rewritten_cv.pdf')
-    temp_path = os.path.join(tempfile.gettempdir(), filename)
-    _text_to_pdf(content, temp_path)
-    return send_file(temp_path, as_attachment=True, download_name=filename)
-
-
 # ---------------------------------------------------------------------------
 # Account page
 # ---------------------------------------------------------------------------
@@ -916,28 +799,6 @@ def account():
 # Snippet rewrite API (for selected paragraph)
 # ---------------------------------------------------------------------------
 
-@app.route('/api/rewrite_snippet', methods=['POST'])
-def api_rewrite_snippet():
-    token = _bearer_token()
-    if not token:
-        return jsonify({'error': 'missing token'}), 401
-    try:
-        auth_client, firestore_db = get_firebase()
-        decoded = auth_client.verify_id_token(token)
-    except Exception:
-        return jsonify({'error': 'invalid token'}), 401
-
-    body = request.get_json(silent=True) or {}
-    sid = body.get('session_id', '')
-    text = body.get('text', '')
-    if not text:
-        return jsonify({'error': 'missing text'}), 400
-    payload = _load_session_payload(sid) if sid else None
-    jd_text = (payload or {}).get('jd_text', '')
-    rewritten = rewrite_snippet(text, jd_text)
-    if not rewritten:
-        return jsonify({'error': 'rewrite_failed'}), 500
-    return jsonify({'rewritten': rewritten})
 
 
 # ---------------------------------------------------------------------------

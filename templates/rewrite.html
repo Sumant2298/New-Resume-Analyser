@@ -8,16 +8,7 @@
             <p class="text-xs uppercase tracking-[0.2em] text-white/80 font-semibold">CV Rewrite Complete</p>
             <h1 class="text-2xl font-bold">Your CV has been optimized for this role</h1>
         </div>
-        <div class="flex items-center gap-3">
-            {% if results %}
-            <div class="bg-white/15 px-3 py-2 rounded-lg text-sm font-semibold">
-                Original ATS: {{ results.ats_score|default(0) }}%
-            </div>
-            {% endif %}
-            <div class="bg-emerald-100 text-emerald-800 px-3 py-2 rounded-lg text-sm font-bold">
-                Credits used: {{ cost_rewrite|default(5) }}
-            </div>
-        </div>
+        <div class="flex items-center gap-3"></div>
     </div>
 </section>
 
@@ -30,19 +21,8 @@
     </style>
 
     <div class="bg-white rounded-2xl shadow-lg border border-emerald-100 p-6">
-        <h2 class="text-lg font-bold text-slate-800 mb-3">What Changed</h2>
-        {% if rewrites and rewrites.changes %}
-        <ul class="space-y-2 text-sm text-slate-700">
-            {% for item in rewrites.changes %}
-            <li class="flex items-start gap-2">
-                <svg class="w-4 h-4 text-emerald-500 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
-                <span>{{ item }}</span>
-            </li>
-            {% endfor %}
-        </ul>
-        {% else %}
-        <p class="text-slate-500 text-sm">Your CV has been rewritten with stronger verbs and JD keywords.</p>
-        {% endif %}
+        <h2 class="text-lg font-bold text-slate-800 mb-3">Rewrite is disabled</h2>
+        <p class="text-sm text-slate-600">CV rewrite is currently turned off. You can still view your original and optimized text below if available.</p>
     </div>
 
     <div class="bg-white rounded-2xl shadow-lg border border-slate-100 p-6">
@@ -124,15 +104,7 @@
         </div>
     </div>
 
-    <!-- Snippet rewrite helper -->
-    <div class="bg-white rounded-2xl shadow-lg border border-slate-200 p-4">
-        <div class="flex items-center justify-between mb-3">
-            <h3 class="text-sm font-bold text-slate-800">Rewrite a selected paragraph</h3>
-            <button onclick="rewriteSelection()" class="text-xs px-3 py-1.5 rounded-lg bg-emerald-500 text-white hover:bg-emerald-600">Rewrite selection</button>
-        </div>
-        <p class="text-xs text-slate-500 mb-2">Select any text in Original or Optimized columns above, then click “Rewrite selection”.</p>
-        <textarea id="snippetOutput" rows="4" class="w-full border border-slate-200 rounded-lg p-3 text-sm bg-slate-50" placeholder="Rewritten snippet will appear here"></textarea>
-    </div>
+    <!-- Snippet rewrite helper removed (rewrite disabled) -->
 </section>
 
 <script>

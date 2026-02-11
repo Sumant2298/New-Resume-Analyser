@@ -27,7 +27,8 @@ LLM_ONLY=true
 
 ### 2b) Credits
 - Starter credits: `INITIAL_CREDITS=100` (on first sign-in)
-- Costs: `COST_ANALYZE=2` credits per CV+JD analysis, `COST_REWRITE=5` credits per rewrite
+- Costs: `COST_ANALYZE=2` credits per CV+JD analysis
+- Rewrite is currently disabled; `COST_REWRITE` is ignored
 - You can adjust via env vars. Credits are stored in Firestore.
 
 ### 3) Firebase (Auth)
